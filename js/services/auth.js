@@ -39,6 +39,7 @@ async function handleRegister(e) {
   btn.textContent = 'Criando…';
 
   try {
+    // checa handle (rules de handles permitem leitura pública)
     const taken = await db.ref('handles/' + handle).once('value');
     if (taken.exists()) {
       errorEl.textContent = 'Esse @ já está em uso.';
@@ -61,7 +62,13 @@ async function handleRegister(e) {
     await db.ref('users/' + uid).set(profile);
     await db.ref('handles/' + handle).set({ uid, name: profile.name });
   } catch (err) {
-    errorEl.textContent = translateAuthError(err.code);
+    console.error('register', err);
+    // se Auth criou user mas DB falhou, ainda mostra erro útil
+    const code = err.code || '';
+    const msg = translateAuthError(code);
+    errorEl.textContent = msg === 'Erro ao autenticar.'
+      ? (err.message || code || 'Erro ao criar conta. Confira Auth + Rules.')
+      : msg;
     btn.disabled = false;
     btn.textContent = 'Criar conta';
   }
@@ -79,7 +86,10 @@ function translateAuthError(code) {
     'auth/email-already-in-use': 'E-mail já em uso.',
     'auth/weak-password': 'Senha: mínimo 6 caracteres.',
     'auth/invalid-credential': 'E-mail ou senha incorretos.',
-    'auth/too-many-requests': 'Muitas tentativas. Aguarde.'
+    'auth/too-many-requests': 'Muitas tentativas. Aguarde.',
+    'auth/operation-not-allowed': 'E-mail/senha desativado no Firebase Auth.',
+    'auth/network-request-failed': 'Falha de rede. Tente de novo.',
+    'PERMISSION_DENIED': 'Rules do Database bloquearam a escrita. Publique rules atualizadas.'
   };
   return map[code] || 'Erro ao autenticar.';
 }
