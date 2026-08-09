@@ -206,8 +206,26 @@ img { max-width: 100%; display: block; }
 
 .shell {
   width: 100%;
+  max-width: 920px;
+  padding: 16px 16px 40px;
+  box-sizing: border-box;
+}
+/* Feed stays Instagram-narrow; other views use width */
+#view-feed {
   max-width: var(--feed-w);
-  padding: 16px 0 40px;
+  margin: 0 auto;
+  width: 100%;
+}
+#view-profile {
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+#view-dms,
+#view-admin,
+#view-notifications {
+  width: 100%;
+  max-width: 100%;
 }
 
 .right-rail {
@@ -643,7 +661,7 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
   .center-col { width: 100%; }
   .shell {
     max-width: 100%;
-    padding: 0 0 24px;
+    padding: 8px 0 72px;
   }
   .stories { padding-left: 10px; padding-right: 10px; }
   .ig-card { border-radius: 0; }
@@ -863,59 +881,105 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 
 .dm-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: 70vh;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
-  margin: 0 8px;
+  margin: 0;
+  background: var(--bg);
+  width: 100%;
 }
 .dm-list {
   border-right: 1px solid var(--line);
-  overflow: auto;
-  max-height: 75vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .dm-list-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px;
+  gap: 8px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.dm-list-head strong { font-size: 1rem; }
+.dm-list-empty {
+  padding: 20px 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 .dm-thread-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 12px 16px;
   text-align: left;
   color: var(--text);
   border-bottom: 1px solid var(--line);
+  min-width: 0;
+  align-items: center;
 }
 .dm-thread-row.active, .dm-thread-row:hover { background: var(--bg-2); }
-.dm-chat { display: flex; flex-direction: column; min-height: 60vh; }
+.dm-thread-row .rail-me-text {
+  min-width: 0;
+  overflow: hidden;
+}
+.dm-thread-row .rail-me-text span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dm-chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
 .dm-chat-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.dm-chat-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dm-messages {
   flex: 1;
-  overflow: auto;
-  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 55vh;
+  gap: 10px;
+  min-height: 0;
 }
 .dm-bubble {
-  max-width: 75%;
-  padding: 10px 12px;
-  border-radius: 14px;
+  max-width: min(75%, 420px);
+  padding: 10px 14px;
+  border-radius: 16px;
   background: var(--elevated);
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   align-self: flex-start;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 .dm-bubble.mine {
   align-self: flex-end;
@@ -924,16 +988,48 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 .dm-compose {
   display: flex;
   gap: 8px;
-  padding: 12px;
+  padding: 12px 16px;
   border-top: 1px solid var(--line);
+  flex-shrink: 0;
+  align-items: center;
 }
-.dm-compose .input { flex: 1; }
+.dm-compose .input {
+  flex: 1;
+  min-width: 0;
+}
+.dm-empty-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--muted);
+  min-height: 280px;
+}
+.dm-empty-pane h3 {
+  color: var(--text);
+  margin-bottom: 8px;
+  font-size: 1.25rem;
+}
+.dm-empty-pane p {
+  max-width: 280px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
 
 @media (max-width: 768px) {
-  .dm-layout { grid-template-columns: 1fr; margin: 0; border: none; border-radius: 0; }
+  .dm-layout {
+    grid-template-columns: 1fr;
+    height: calc(100vh - 110px);
+    max-height: calc(100vh - 110px);
+    border: none;
+    border-radius: 0;
+  }
   .dm-list.has-active { display: none; }
-  .dm-list { max-height: none; }
-  .dm-chat { min-height: 80vh; }
+  .dm-list { max-height: none; height: 100%; }
+  .dm-chat { height: 100%; }
 }
 
 
@@ -1364,4 +1460,254 @@ select option {
 
 @media (max-width: 600px) {
   .vivo-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ========== LAYOUT FIX PACK ========== */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.app {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.center-col {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Text never clips awkwardly */
+.ig-caption,
+.ig-meta,
+.post-text,
+.comment-row,
+.dm-bubble,
+.notif-row,
+.mod-row p,
+.hint {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ig-user {
+  min-width: 0;
+}
+.ig-user strong,
+.ig-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ig-head {
+  min-width: 0;
+  gap: 10px;
+}
+.ig-card {
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Profile header wrap */
+.ig-profile-header {
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 20px 16px 16px;
+}
+.ig-profile-meta {
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.ig-profile-userline {
+  flex-wrap: wrap;
+  gap: 10px;
+  row-gap: 8px;
+}
+.ig-username {
+  word-break: break-word;
+  max-width: 100%;
+}
+.ig-stats {
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+.ig-bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Admin */
+.admin-wrap {
+  width: 100%;
+  max-width: 100%;
+  padding: 0 0 32px;
+  overflow-x: hidden;
+}
+.admin-tabs {
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.admin-panel-body {
+  width: 100%;
+  min-width: 0;
+}
+.panel {
+  overflow: hidden;
+  max-width: 100%;
+}
+.panel h3 {
+  word-break: break-word;
+}
+.form-row {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+.form-row .form-group {
+  min-width: 0;
+}
+.mod-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.mod-row > div {
+  min-width: 0;
+  flex: 1 1 140px;
+}
+.mod-row p {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+.admin-table-wrap,
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  min-width: 280px;
+}
+
+/* Feed filters */
+.feed-filters {
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Modal post */
+.modal-post {
+  min-width: 0;
+  width: 100%;
+}
+.modal-post-side {
+  min-width: 0;
+  overflow: hidden;
+}
+.modal-comments {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.comment-form {
+  min-width: 0;
+}
+.comment-form .input {
+  min-width: 0;
+}
+
+/* Stories */
+.stories {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Apt tools */
+.apt-row {
+  min-width: 0;
+}
+.admin-post-tools {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Empty states */
+.empty {
+  padding: 48px 20px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.empty p {
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.45;
+}
+
+/* Mobile refinements */
+@media (max-width: 768px) {
+  .shell {
+    padding: 8px 0 72px;
+    max-width: 100%;
+  }
+  #view-feed,
+  #view-profile {
+    max-width: 100%;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  .ig-profile-header {
+    padding: 16px 12px;
+  }
+  .panel {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  .admin-wrap {
+    padding-bottom: 80px;
+  }
+  .modal-sheet {
+    max-width: 100%;
+    margin: 0 8px;
+  }
+  .ig-dialog-card {
+    max-width: calc(100vw - 24px);
+  }
+  .feed-filters {
+    padding: 8px 10px 10px;
+  }
+  .session-banner {
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+}
+
+@media (max-width: 1160px) {
+  .shell {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Side nav badges don't push labels off */
+.side-link {
+  min-width: 0;
+  overflow: hidden;
+}
+.side-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-badge {
+  flex-shrink: 0;
 }
