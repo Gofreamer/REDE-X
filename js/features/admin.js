@@ -1,11 +1,8 @@
-/* Rede X — Admin */
-
 function renderAdmin() {
   const el = document.getElementById('admin-root');
   if (!el) return;
-
   if (!isUserAdmin()) {
-    el.innerHTML = `<div class="empty-state"><h3>Acesso negado</h3><p>Só o núcleo opera este painel.</p></div>`;
+    el.innerHTML = `<div class="empty"><h3>Acesso restrito</h3><p>Só o núcleo da mesa.</p></div>`;
     return;
   }
 
@@ -14,85 +11,111 @@ function renderAdmin() {
     .sort((a, b) => (a.handle || '').localeCompare(b.handle || ''));
 
   el.innerHTML = `
-    <div class="admin-grid">
-      <div class="panel">
-        <h3>Postar como NPC / mídia</h3>
-        <p class="hint">Aparece na timeline com o @ que você definir. Não precisa de conta real.</p>
-        <div class="form-group">
-          <label>Handle</label>
-          <input type="text" id="admin-npc-handle" class="input" placeholder="nina_riders"/>
-        </div>
-        <div class="form-group">
-          <label>Nome</label>
-          <input type="text" id="admin-npc-name" class="input" placeholder="Nina Riders"/>
-        </div>
-        <div class="form-group">
-          <label>Texto</label>
-          <textarea id="admin-npc-text" class="input" maxlength="280" rows="3" placeholder="Breaking: …"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Imagem (URL)</label>
-          <input type="url" id="admin-npc-image" class="input" placeholder="https://…"/>
-        </div>
-        <button type="button" class="btn btn-primary" onclick="adminNpcPost()">Publicar no fio</button>
-      </div>
+    <div class="admin-stack">
+      <section class="panel">
+        <h3>Publicar como NPC / mídia</h3>
+        <p class="hint">Conta fictícia no fio — sem login real.</p>
+        <form onsubmit="adminNpcPost(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Handle</label>
+              <input class="input" id="adm-handle" placeholder="nina_riders" required/>
+            </div>
+            <div class="form-group">
+              <label>Nome</label>
+              <input class="input" id="adm-name" placeholder="Nina Riders"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Imagem (URL)</label>
+            <input class="input" id="adm-image" type="url" placeholder="https://…" required/>
+          </div>
+          <div class="form-group">
+            <label>Legenda</label>
+            <textarea class="input" id="adm-caption" rows="3" maxlength="500" placeholder="#NinaLive no porto…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Publicar no fio</button>
+        </form>
+      </section>
 
-      <div class="panel">
-        <h3>Contas</h3>
-        <div class="admin-table-wrap">
-          <table class="admin-table">
-            <thead><tr><th>Handle</th><th>Nome</th><th>Admin</th><th>UID</th></tr></thead>
+      <section class="panel">
+        <h3>Story (24h)</h3>
+        <form onsubmit="adminSubmitStory(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Handle</label>
+              <input class="input" id="adm-story-handle" placeholder="porto_wire"/>
+            </div>
+            <div class="form-group">
+              <label>Nome</label>
+              <input class="input" id="adm-story-name" placeholder="Porto Wire"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Imagem</label>
+            <input class="input" id="adm-story-image" type="url" required placeholder="https://…"/>
+          </div>
+          <button type="submit" class="btn btn-primary">Subir story</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h3>Contas (${users.length})</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>@</th><th>Nome</th><th>Admin</th></tr></thead>
             <tbody>
               ${users.map(u => `
                 <tr>
                   <td>${displayHandle(u.handle)}</td>
                   <td>${escapeHTML(u.name || '—')}</td>
                   <td>${u.isAdmin ? '✓' : '—'}</td>
-                  <td><code class="uid-code">${escapeHTML(u.id)}</code></td>
-                </tr>
-              `).join('') || '<tr><td colspan="4">Nenhuma conta</td></tr>'}
+                </tr>`).join('') || '<tr><td colspan="3">Vazio</td></tr>'}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      <div class="panel panel-wide">
-        <h3>Últimos posts</h3>
-        <div class="admin-posts">
-          ${state.posts.slice(0, 20).map(p => `
-            <div class="admin-post-row">
+      <section class="panel">
+        <h3>Moderação rápida</h3>
+        <div class="mod-list">
+          ${state.posts.slice(0, 15).map(p => `
+            <div class="mod-row">
+              <img src="${escapeHTML(p.image)}" alt="" onerror="this.style.display='none'"/>
               <div>
                 <strong>${displayHandle(p.handle)}</strong>
-                <span class="text-muted">${timeAgo(p.createdAt)}</span>
-                <p>${escapeHTML((p.text || '').slice(0, 120))}</p>
+                <p>${escapeHTML((p.caption || '').slice(0, 60))}</p>
               </div>
+              <button class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}')">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
               <button class="btn btn-ghost btn-sm text-danger" onclick="deletePost('${p.id}')">Apagar</button>
             </div>
-          `).join('') || '<p class="text-muted">Vazio.</p>'}
+          `).join('') || '<p class="text-muted">Sem posts.</p>'}
         </div>
-      </div>
-    </div>
-  `;
+      </section>
+    </div>`;
 }
 
-async function adminNpcPost() {
-  const handle = document.getElementById('admin-npc-handle')?.value || '';
-  const name = document.getElementById('admin-npc-name')?.value || '';
-  const text = document.getElementById('admin-npc-text')?.value || '';
-  const image = document.getElementById('admin-npc-image')?.value || '';
-  if (!normalizeHandle(handle)) {
-    showToast('Handle obrigatório.', 'error');
-    return;
-  }
+async function adminNpcPost(e) {
+  e.preventDefault();
   const ok = await createPost({
-    text,
-    image,
-    asHandle: handle,
-    asName: name || handle
+    image: document.getElementById('adm-image').value,
+    caption: document.getElementById('adm-caption').value,
+    asHandle: document.getElementById('adm-handle').value,
+    asName: document.getElementById('adm-name').value
   });
   if (ok) {
-    showToast('NPC no ar.');
-    document.getElementById('admin-npc-text').value = '';
-    document.getElementById('admin-npc-image').value = '';
+    showToast('NPC publicado.');
+    e.target.reset();
   }
+}
+
+
+async function adminSubmitStory(e) {
+  e.preventDefault();
+  const ok = await createStory({
+    image: document.getElementById('adm-story-image')?.value,
+    asHandle: document.getElementById('adm-story-handle')?.value,
+    asName: document.getElementById('adm-story-name')?.value
+  });
+  if (ok) e.target.reset();
 }

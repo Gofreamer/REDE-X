@@ -1,64 +1,46 @@
-/* Rede X — Utils */
-
 function escapeHTML(str) {
   if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function showToast(message, type = 'success') {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    document.body.appendChild(container);
+function showToast(msg, type = 'ok') {
+  let box = document.getElementById('toasts');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'toasts';
+    document.body.appendChild(box);
   }
   const el = document.createElement('div');
   el.className = 'toast toast-' + type;
-  el.textContent = message;
-  container.appendChild(el);
-  setTimeout(() => el.classList.add('show'), 10);
+  el.textContent = msg;
+  box.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(() => {
     el.classList.remove('show');
-    setTimeout(() => el.remove(), 300);
-  }, 3000);
+    setTimeout(() => el.remove(), 280);
+  }, 2800);
 }
 
 function timeAgo(ts) {
   if (!ts) return '';
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return 'agora';
-  if (s < 3600) return Math.floor(s / 60) + 'm';
-  if (s < 86400) return Math.floor(s / 3600) + 'h';
-  if (s < 604800) return Math.floor(s / 86400) + 'd';
+  if (s < 3600) return Math.floor(s / 60) + ' min';
+  if (s < 86400) return Math.floor(s / 3600) + ' h';
+  if (s < 604800) return Math.floor(s / 86400) + ' d';
   return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-}
-
-function formatDateTime(ts) {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleString('pt-BR', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
 }
 
 function isUserAdmin() {
   if (state.user && ADMIN_UIDS.includes(state.user.uid)) return true;
   const v = state.profile?.isAdmin;
-  return v === true || v === 'true' || v === 1 || v === '1';
+  return v === true || v === 'true' || v === 1;
 }
 
 function normalizeHandle(h) {
-  return String(h || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^@/, '')
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 24);
+  return String(h || '').trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9_]/g, '').slice(0, 24);
 }
 
 function displayHandle(h) {
@@ -66,69 +48,53 @@ function displayHandle(h) {
   return n ? '@' + n : '@—';
 }
 
-function linkifyText(text) {
-  const safe = escapeHTML(text || '');
-  return safe
-    .replace(/@([a-z0-9_]{2,24})/gi, '<span class="mention">@$1</span>')
-    .replace(/#([a-z0-9_]{2,32})/gi, '<span class="hashtag">#$1</span>')
+function linkify(text) {
+  return escapeHTML(text || '')
+    .replace(/@([a-z0-9_]{2,24})/gi, '<span class="tag">@$1</span>')
+    .replace(/#([a-z0-9_]{2,32})/gi, '<span class="tag">#$1</span>')
     .replace(/\n/g, '<br>');
 }
 
-let _rxConfirmResolver = null;
-
-function rxConfirm(opts) {
-  const {
-    title = 'Confirmar',
-    body = '',
-    confirmLabel = 'Confirmar',
-    cancelLabel = 'Cancelar',
-    danger = false
-  } = opts || {};
-
-  ensureConfirmModal();
-  const modal = document.getElementById('rx-confirm-modal');
-  document.getElementById('rx-confirm-title').textContent = title;
-  const bodyEl = document.getElementById('rx-confirm-body');
-  bodyEl.innerHTML = body || '';
-  bodyEl.classList.toggle('hidden', !body);
-  const okBtn = document.getElementById('rx-confirm-ok');
-  okBtn.textContent = confirmLabel;
-  okBtn.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
-  document.getElementById('rx-confirm-cancel').textContent = cancelLabel;
-  modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-
-  return new Promise((resolve) => {
-    _rxConfirmResolver = resolve;
-  });
+function avatarHTML(p, sizeClass = '') {
+  const letter = ((p?.name || p?.handle || '?')[0] || '?').toUpperCase();
+  if (p?.avatar) {
+    return `<div class="avatar ${sizeClass}"><img src="${escapeHTML(p.avatar)}" alt="" onerror="this.parentElement.innerHTML='<span>${letter}</span>'"/></div>`;
+  }
+  return `<div class="avatar ${sizeClass}"><span>${letter}</span></div>`;
 }
 
-function ensureConfirmModal() {
-  if (document.getElementById('rx-confirm-modal')) return;
-  const wrap = document.createElement('div');
-  wrap.id = 'rx-confirm-modal';
-  wrap.className = 'modal';
-  wrap.innerHTML = `
-    <div class="modal-dialog">
-      <div class="confirm-card">
-        <h3 id="rx-confirm-title">Confirmar</h3>
-        <p id="rx-confirm-body" class="confirm-body"></p>
-        <div class="confirm-actions">
-          <button type="button" class="btn btn-ghost" id="rx-confirm-cancel">Cancelar</button>
-          <button type="button" class="btn btn-primary" id="rx-confirm-ok">Confirmar</button>
-        </div>
+let _confirmResolve = null;
+function rgConfirm({ title = 'Confirmar', body = '', confirmLabel = 'OK', danger = false } = {}) {
+  ensureConfirm();
+  const m = document.getElementById('rg-confirm');
+  document.getElementById('rg-confirm-title').textContent = title;
+  document.getElementById('rg-confirm-body').innerHTML = body || '';
+  const ok = document.getElementById('rg-confirm-ok');
+  ok.textContent = confirmLabel;
+  ok.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+  m.classList.add('open');
+  return new Promise(r => { _confirmResolve = r; });
+}
+function ensureConfirm() {
+  if (document.getElementById('rg-confirm')) return;
+  const d = document.createElement('div');
+  d.id = 'rg-confirm';
+  d.className = 'modal';
+  d.innerHTML = `
+    <div class="modal-sheet">
+      <h3 id="rg-confirm-title">Confirmar</h3>
+      <p id="rg-confirm-body" class="modal-body"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="rg-confirm-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="rg-confirm-ok">OK</button>
       </div>
-    </div>
-  `;
-  document.body.appendChild(wrap);
-  const close = (val) => {
-    wrap.classList.remove('open');
-    document.body.style.overflow = '';
-    const r = _rxConfirmResolver;
-    _rxConfirmResolver = null;
-    if (r) r(val);
+    </div>`;
+  document.body.appendChild(d);
+  const close = (v) => {
+    d.classList.remove('open');
+    const r = _confirmResolve; _confirmResolve = null; if (r) r(v);
   };
-  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(false); });
-  document.getElementById('rx-confirm-cancel').onclick = () => close(false);
-  document.getElementById('rx-confirm-ok').onclick = () => close(true);
+  d.addEventListener('click', e => { if (e.target === d) close(false); });
+  document.getElementById('rg-confirm-cancel').onclick = () => close(false);
+  document.getElementById('rg-confirm-ok').onclick = () => close(true);
 }

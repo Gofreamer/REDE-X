@@ -1,17 +1,17 @@
-/* Rede X — Start */
-
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(user => {
   if (user) {
     state.user = user;
-    showApp();
+    showAppShell();
     listenProfile(user.uid);
     listenPosts();
     listenProfiles();
-    showView('home');
+    listenStories();
+    showView('feed');
   } else {
     state.user = null;
     state.profile = null;
     state.posts = [];
-    showAuthScreen();
+    state.stories = [];
+    showAuth();
   }
 });

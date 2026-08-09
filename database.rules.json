@@ -3,31 +3,41 @@
     "users": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
         "isAdmin": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.val() === false || newData.val() == null)"
         }
       }
     },
     "handles": {
-      ".read": "auth != null",
+      ".read": true,
       "$handle": {
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
       }
     },
     "posts": {
       ".read": "auth != null",
-      ".indexOn": ["createdAt", "replyTo"],
+      ".indexOn": ["createdAt"],
       "$pid": {
-        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned'))",
         "likes": {
-          "$uid": {
-            ".write": "auth != null && auth.uid === $uid"
-          }
+          "$uid": { ".write": "auth != null && auth.uid === $uid" }
         },
-        "likeCount": {
+        "likeCount": { ".write": "auth != null" },
+        "comments": {
           ".write": "auth != null"
+        },
+        "commentCount": { ".write": "auth != null" },
+        "pinned": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
         }
+      }
+    },
+    "stories": {
+      ".read": "auth != null",
+      ".indexOn": ["createdAt"],
+      "$sid": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
       }
     }
   }

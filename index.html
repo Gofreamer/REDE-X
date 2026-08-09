@@ -2,94 +2,160 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Rede X</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23090b10'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='system-ui' font-weight='700' font-size='14' fill='%23a78bfa'%3EX%3C/text%3E%3C/svg%3E">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Rede Global</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23f58529'/%3E%3Cstop offset='.5' stop-color='%23dd2a7b'/%3E%3Cstop offset='1' stop-color='%238135a2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='%230a0a0c'/%3E%3Crect x='6' y='6' width='20' height='20' rx='6' fill='none' stroke='url(%23g)' stroke-width='2'/%3E%3C/svg%3E"/>
   <link rel="stylesheet" href="./css/styles.css"/>
 </head>
 <body>
   <!-- AUTH -->
-  <div id="auth-screen" class="auth-screen">
+  <div id="auth-screen" class="auth">
+    <div class="auth-bg"></div>
     <div class="auth-card">
-      <div class="auth-brand">
-        <div class="logo-mark">X</div>
-        <h1>Rede X</h1>
-        <p>O fio da cidade. Rumores, mídia e sinal aberto.</p>
+      <div class="brand-block">
+        <div class="logo-ring"><span>RG</span></div>
+        <h1>Rede Global</h1>
+        <p>A cidade em imagens. Fama, rumor e sinal aberto.</p>
       </div>
       <div class="auth-tabs">
         <button type="button" class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Entrar</button>
         <button type="button" class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Criar conta</button>
       </div>
       <form id="login-form" onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label>E-mail</label>
-          <input type="email" id="login-email" class="input" required placeholder="player@rede.rpg"/>
-        </div>
-        <div class="form-group">
-          <label>Senha</label>
-          <input type="password" id="login-password" class="input" required minlength="6"/>
-        </div>
-        <p class="form-error" id="login-error"></p>
-        <button type="submit" class="btn btn-primary btn-full" id="btn-login">Entrar</button>
+        <label class="field"><span>E-mail</span>
+          <input type="email" id="login-email" required placeholder="player@rede.global"/>
+        </label>
+        <label class="field"><span>Senha</span>
+          <input type="password" id="login-password" required minlength="6"/>
+        </label>
+        <p class="error" id="login-error"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="btn-login">Entrar</button>
       </form>
       <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
-        <div class="form-group">
-          <label>Nome</label>
-          <input type="text" id="register-name" class="input" required maxlength="40" placeholder="Wei-Hayasaka Xing"/>
-        </div>
-        <div class="form-group">
-          <label>Handle (@)</label>
-          <input type="text" id="register-handle" class="input" required maxlength="24" placeholder="wei_xing"/>
-        </div>
-        <div class="form-group">
-          <label>E-mail</label>
-          <input type="email" id="register-email" class="input" required placeholder="player@rede.rpg"/>
-        </div>
-        <div class="form-group">
-          <label>Senha</label>
-          <input type="password" id="register-password" class="input" required minlength="6"/>
-        </div>
-        <p class="form-error" id="register-error"></p>
-        <button type="submit" class="btn btn-primary btn-full" id="btn-register">Criar conta</button>
+        <label class="field"><span>Nome</span>
+          <input type="text" id="register-name" required maxlength="40" placeholder="Wei-Hayasaka Xing"/>
+        </label>
+        <label class="field"><span>Handle</span>
+          <input type="text" id="register-handle" required maxlength="24" placeholder="wei_xing"/>
+        </label>
+        <label class="field"><span>E-mail</span>
+          <input type="email" id="register-email" required placeholder="player@rede.global"/>
+        </label>
+        <label class="field"><span>Senha</span>
+          <input type="password" id="register-password" required minlength="6"/>
+        </label>
+        <p class="error" id="register-error"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="btn-register">Criar conta</button>
       </form>
     </div>
   </div>
 
   <!-- APP -->
   <div id="app" class="app hidden">
-    <header class="header">
-      <div class="header-left">
-        <div class="logo-mark small">X</div>
-        <span class="brand">Rede X</span>
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="logo-ring sm"><span>RG</span></div>
+        <span class="topbar-title">Rede Global</span>
       </div>
-      <nav class="nav">
-        <button class="nav-item active" data-view="home" onclick="showView('home')">Fio</button>
-        <button class="nav-item" data-view="profile" onclick="showView('profile')">Perfil</button>
-        <button class="nav-item admin-only hidden" data-view="admin" onclick="showView('admin')">Admin</button>
-      </nav>
-      <div class="header-right">
-        <span id="header-user" class="header-handle"></span>
-        <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Sair</button>
+      <div class="topbar-actions">
+        <span id="chrome-handle" class="chrome-handle"></span>
+        <button type="button" class="icon-btn" onclick="openCompose()" title="Novo post">＋</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="handleLogout()">Sair</button>
       </div>
     </header>
 
-    <main class="main">
-      <section id="view-home" class="view">
-        <div id="composer" class="composer-wrap"></div>
-        <div id="timeline" class="timeline"></div>
+    <main class="shell">
+      <section id="view-feed" class="view">
+        <div id="stories" class="stories"></div>
+        <div id="feed" class="feed"></div>
       </section>
-
       <section id="view-profile" class="view hidden">
         <div id="profile-root"></div>
       </section>
-
       <section id="view-admin" class="view hidden">
         <div id="admin-root"></div>
       </section>
     </main>
+
+    <nav class="tabbar">
+      <button type="button" class="tab-btn active" data-view="feed" onclick="showView('feed')">
+        <span class="tab-ico">⌂</span><span>Fio</span>
+      </button>
+      <button type="button" class="tab-btn" onclick="openCompose()">
+        <span class="tab-ico tab-plus">＋</span><span>Post</span>
+      </button>
+      <button type="button" class="tab-btn" data-view="profile" onclick="showView('profile')">
+        <span class="tab-ico">◎</span><span>Perfil</span>
+      </button>
+      <button type="button" class="tab-btn admin-only hidden" data-view="admin" onclick="showView('admin')">
+        <span class="tab-ico">✦</span><span>Admin</span>
+      </button>
+    </nav>
   </div>
 
-  <div id="toast-container"></div>
+  <!-- Compose -->
+  <div id="compose-modal" class="modal" onclick="if(event.target===this)closeCompose()">
+    <div class="modal-sheet compose-sheet">
+      <div class="sheet-head">
+        <h3>Nova publicação</h3>
+        <button type="button" class="icon-btn" onclick="closeCompose()">✕</button>
+      </div>
+      <form id="compose-form" onsubmit="submitCompose(event)">
+        <div id="compose-preview" class="compose-preview"><span class="text-muted">Prévia da imagem</span></div>
+        <label class="field"><span>URL da imagem</span>
+          <input type="url" id="compose-image" required placeholder="https://…" oninput="previewComposeImage()"/>
+        </label>
+        <label class="field"><span>Legenda</span>
+          <textarea id="compose-caption" rows="3" maxlength="500" placeholder="O que está rolando na cidade?"></textarea>
+        </label>
+        <div class="admin-only hidden">
+          <label class="field"><span>Postar como handle (admin)</span>
+            <input type="text" id="compose-as" placeholder="vazio = você"/>
+          </label>
+          <label class="field"><span>Nome de exibição</span>
+            <input type="text" id="compose-as-name" placeholder="Nina Riders"/>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Compartilhar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Post detail -->
+  <div id="post-modal" class="modal" onclick="if(event.target===this)closePostModal()">
+    <div class="modal-sheet post-sheet">
+      <div id="post-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Story view -->
+  <div id="story-modal" class="modal story-layer" onclick="if(event.target===this)closeStory()">
+    <div id="story-modal-body"></div>
+  </div>
+
+  <!-- Story compose -->
+  <div id="story-compose-modal" class="modal" onclick="if(event.target===this)closeStoryCompose()">
+    <div class="modal-sheet">
+      <div class="sheet-head">
+        <h3>Novo story</h3>
+        <button type="button" class="icon-btn" onclick="closeStoryCompose()">✕</button>
+      </div>
+      <form onsubmit="submitStory(event)">
+        <label class="field"><span>Handle</span>
+          <input class="input" id="story-handle" placeholder="porto_wire"/>
+        </label>
+        <label class="field"><span>Nome</span>
+          <input class="input" id="story-name" placeholder="Porto Wire"/>
+        </label>
+        <label class="field"><span>Imagem URL</span>
+          <input class="input" id="story-image" type="url" required/>
+        </label>
+        <button type="submit" class="btn btn-primary btn-block">Publicar story</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
@@ -99,7 +165,8 @@
   <script src="./js/core/utils.js"></script>
   <script src="./js/services/auth.js"></script>
   <script src="./js/services/database.js"></script>
-  <script src="./js/features/timeline.js"></script>
+  <script src="./js/features/feed.js"></script>
+  <script src="./js/features/compose.js"></script>
   <script src="./js/features/profile.js"></script>
   <script src="./js/features/admin.js"></script>
   <script src="./js/app/navigation.js"></script>

@@ -1,4 +1,4 @@
-/* Rede X — Firebase Config */
+/* Rede Global — Firebase (mesmo projeto rede-x) */
 const firebaseConfig = {
   apiKey: "AIzaSyAbc_DWHKEambENHQUTFpWLrQxWqkq8Imw",
   authDomain: "rede-x.firebaseapp.com",
