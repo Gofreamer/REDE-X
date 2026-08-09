@@ -21,6 +21,7 @@ function renderFeed() {
   }
 
   el.innerHTML = posts.map(renderPostCard).join('');
+  if (typeof renderRightRail === 'function') renderRightRail();
 }
 
 function renderStories() {
@@ -198,4 +199,50 @@ function openStory(id) {
 
 function closeStory() {
   document.getElementById('story-modal')?.classList.remove('open');
+}
+
+
+function renderRightRail() {
+  const me = document.getElementById('rail-me');
+  const list = document.getElementById('rail-suggestions');
+  if (!me || !list) return;
+
+  if (state.profile) {
+    me.innerHTML = `
+      <div class="rail-me-row">
+        ${avatarHTML(state.profile, 'sm')}
+        <div class="rail-me-text">
+          <strong>${escapeHTML(state.profile.handle || '')}</strong>
+          <span>${escapeHTML(state.profile.name || '')}</span>
+        </div>
+        <button type="button" class="rail-link" onclick="showView('profile')">Perfil</button>
+      </div>`;
+  } else {
+    me.innerHTML = '';
+  }
+
+  // handles vistos nos posts (NPC + players), exceto você
+  const myH = normalizeHandle(state.profile?.handle);
+  const seen = {};
+  state.posts.forEach(p => {
+    const h = normalizeHandle(p.handle);
+    if (!h || h === myH) return;
+    if (!seen[h]) seen[h] = { handle: h, name: p.name || h, avatar: p.avatar || '' };
+  });
+  const items = Object.values(seen).slice(0, 6);
+
+  if (!items.length) {
+    list.innerHTML = `<p class="rail-empty">Quando a cidade postar, os perfis aparecem aqui.</p>`;
+    return;
+  }
+  list.innerHTML = items.map(u => `
+    <div class="rail-row">
+      ${avatarHTML(u, 'sm')}
+      <div class="rail-me-text">
+        <strong>${escapeHTML(u.handle)}</strong>
+        <span>${escapeHTML(u.name)}</span>
+      </div>
+      <span class="rail-tag">no ar</span>
+    </div>
+  `).join('');
 }

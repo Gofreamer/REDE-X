@@ -5,7 +5,11 @@ function showView(view) {
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.view === view);
   });
+  document.querySelectorAll('.side-link[data-view]').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
   if (view === 'feed') renderFeed();
   if (view === 'profile') renderProfile();
   if (view === 'admin') renderAdmin();
+  renderRightRail();
 }

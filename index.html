@@ -52,43 +52,82 @@
 
   <!-- APP -->
   <div id="app" class="app hidden">
-    <header class="topbar">
-      <div class="topbar-brand">
+    <!-- Sidebar desktop (Instagram PC) -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
         <div class="logo-ring sm"><span>RG</span></div>
+        <span class="sidebar-logo-text">Rede Global</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button type="button" class="side-link active" data-view="feed" onclick="showView('feed')">
+          <span class="side-ico">⌂</span><span class="side-label">Página inicial</span>
+        </button>
+        <button type="button" class="side-link" onclick="openCompose()">
+          <span class="side-ico">＋</span><span class="side-label">Criar</span>
+        </button>
+        <button type="button" class="side-link" data-view="profile" onclick="showView('profile')">
+          <span class="side-ico">◎</span><span class="side-label">Perfil</span>
+        </button>
+        <button type="button" class="side-link admin-only hidden" data-view="admin" onclick="showView('admin')">
+          <span class="side-ico">✦</span><span class="side-label">Admin</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="side-user">
+          <span id="chrome-handle" class="chrome-handle">@</span>
+        </div>
+        <button type="button" class="side-link side-more" onclick="handleLogout()">
+          <span class="side-ico">☰</span><span class="side-label">Sair</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Coluna central -->
+    <div class="center-col">
+      <header class="mobile-topbar">
         <span class="topbar-title">Rede Global</span>
-      </div>
-      <div class="topbar-actions">
-        <span id="chrome-handle" class="chrome-handle"></span>
-        <button type="button" class="icon-btn" onclick="openCompose()" title="Novo post">＋</button>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="handleLogout()">Sair</button>
-      </div>
-    </header>
+        <button type="button" class="icon-btn" onclick="openCompose()" title="Criar">＋</button>
+      </header>
 
-    <main class="shell">
-      <section id="view-feed" class="view">
-        <div id="stories" class="stories"></div>
-        <div id="feed" class="feed"></div>
-      </section>
-      <section id="view-profile" class="view hidden">
-        <div id="profile-root"></div>
-      </section>
-      <section id="view-admin" class="view hidden">
-        <div id="admin-root"></div>
-      </section>
-    </main>
+      <main class="shell">
+        <section id="view-feed" class="view">
+          <div id="stories" class="stories"></div>
+          <div id="feed" class="feed"></div>
+        </section>
+        <section id="view-profile" class="view hidden">
+          <div id="profile-root"></div>
+        </section>
+        <section id="view-admin" class="view hidden">
+          <div id="admin-root"></div>
+        </section>
+      </main>
+    </div>
 
+    <!-- Painel direito desktop -->
+    <aside class="right-rail" id="right-rail">
+      <div class="rail-me" id="rail-me"></div>
+      <div class="rail-block">
+        <div class="rail-head">
+          <span>No ar na cidade</span>
+        </div>
+        <div id="rail-suggestions" class="rail-list"></div>
+      </div>
+      <p class="rail-footer">Rede Global · in-world · mesa RPG</p>
+    </aside>
+
+    <!-- Tab bar mobile -->
     <nav class="tabbar">
       <button type="button" class="tab-btn active" data-view="feed" onclick="showView('feed')">
-        <span class="tab-ico">⌂</span><span>Fio</span>
+        <span class="tab-ico">⌂</span>
       </button>
       <button type="button" class="tab-btn" onclick="openCompose()">
-        <span class="tab-ico tab-plus">＋</span><span>Post</span>
+        <span class="tab-ico tab-plus">＋</span>
       </button>
       <button type="button" class="tab-btn" data-view="profile" onclick="showView('profile')">
-        <span class="tab-ico">◎</span><span>Perfil</span>
+        <span class="tab-ico">◎</span>
       </button>
       <button type="button" class="tab-btn admin-only hidden" data-view="admin" onclick="showView('admin')">
-        <span class="tab-ico">✦</span><span>Admin</span>
+        <span class="tab-ico">✦</span>
       </button>
     </nav>
   </div>

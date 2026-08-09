@@ -45,6 +45,7 @@ function updateChrome() {
   document.querySelectorAll('.admin-only').forEach(el => {
     el.classList.toggle('hidden', !isUserAdmin());
   });
+  if (typeof renderRightRail === 'function') renderRightRail();
 }
 
 async function createPost({ caption, image, asHandle, asName }) {
