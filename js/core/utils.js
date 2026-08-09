@@ -74,8 +74,7 @@ function linkify(text) {
   return escapeHTML(text || '')
     .replace(/@([a-z0-9_]{2,24})/gi, '<button type="button" class="tag mention-link" onclick="event.stopPropagation();openProfile(\'$1\')">@$1</button>')
     .replace(/#([a-z0-9_]{2,32})/gi, '<button type="button" class="tag hashtag-link" onclick="event.stopPropagation();filterByTag(\'$1\')">#$1</button>')
-    .replace(/
-/g, '<br>');
+    .replace(/\n/g, '<br>');
 }
 
 function avatarHTML(p, sizeClass = '') {
