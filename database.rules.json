@@ -15,6 +15,12 @@
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
       }
     },
+    "npcProfiles": {
+      ".read": "auth != null",
+      "$handle": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+      }
+    },
     "posts": {
       ".read": "auth != null",
       ".indexOn": ["createdAt"],
@@ -24,9 +30,7 @@
           "$uid": { ".write": "auth != null && auth.uid === $uid" }
         },
         "likeCount": { ".write": "auth != null" },
-        "comments": {
-          ".write": "auth != null"
-        },
+        "comments": { ".write": "auth != null" },
         "commentCount": { ".write": "auth != null" },
         "pinned": {
           ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"

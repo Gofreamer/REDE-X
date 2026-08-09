@@ -65,7 +65,10 @@
         <button type="button" class="side-link" onclick="openCompose()">
           <span class="side-ico">＋</span><span class="side-label">Criar</span>
         </button>
-        <button type="button" class="side-link" data-view="profile" onclick="showView('profile')">
+        <button type="button" class="side-link" onclick="openSearch()">
+          <span class="side-ico">⌕</span><span class="side-label">Pesquisar</span>
+        </button>
+        <button type="button" class="side-link" data-view="profile" onclick="goMyProfile()">
           <span class="side-ico">◎</span><span class="side-label">Perfil</span>
         </button>
         <button type="button" class="side-link admin-only hidden" data-view="admin" onclick="showView('admin')">
@@ -123,7 +126,10 @@
       <button type="button" class="tab-btn" onclick="openCompose()">
         <span class="tab-ico tab-plus">＋</span>
       </button>
-      <button type="button" class="tab-btn" data-view="profile" onclick="showView('profile')">
+      <button type="button" class="tab-btn" onclick="openSearch()">
+        <span class="tab-ico">⌕</span>
+      </button>
+      <button type="button" class="tab-btn" data-view="profile" onclick="goMyProfile()">
         <span class="tab-ico">◎</span>
       </button>
       <button type="button" class="tab-btn admin-only hidden" data-view="admin" onclick="showView('admin')">
@@ -194,6 +200,17 @@
     </div>
   </div>
 
+    <div id="search-modal" class="modal" onclick="if(event.target===this)closeSearch()">
+    <div class="modal-sheet">
+      <div class="sheet-head">
+        <h3>Pesquisar</h3>
+        <button type="button" class="icon-btn" onclick="closeSearch()">✕</button>
+      </div>
+      <input type="search" id="search-input" class="input" placeholder="Buscar @handle ou nome" oninput="onSearchInput()" autocomplete="off"/>
+      <div id="search-results" class="search-results"></div>
+    </div>
+  </div>
+
   <div id="toasts"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
@@ -206,9 +223,11 @@
   <script src="./js/services/database.js"></script>
   <script src="./js/features/feed.js"></script>
   <script src="./js/features/compose.js"></script>
+  <script src="./js/features/search.js"></script>
   <script src="./js/features/profile.js"></script>
-  <script src="./js/features/admin.js"></script>
+    <script src="./js/features/admin.js"></script>
   <script src="./js/app/navigation.js"></script>
   <script src="./js/app/start.js"></script>
+  <script type="module" src="./js/features/firebase-ai.js"></script>
 </body>
 </html>

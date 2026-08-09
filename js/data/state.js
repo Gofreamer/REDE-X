@@ -3,8 +3,10 @@ const state = {
   profile: null,
   posts: [],
   profiles: {},
+  npcProfiles: {},
   stories: [],
   currentView: 'feed',
+  viewProfileHandle: null,
   activePost: null,
   composeOpen: false
 };

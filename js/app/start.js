@@ -6,6 +6,7 @@ auth.onAuthStateChanged(user => {
     listenPosts();
     listenProfiles();
     listenStories();
+    listenNpcProfiles();
     showView('feed');
   } else {
     state.user = null;

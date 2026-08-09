@@ -69,7 +69,7 @@ function renderPostCard(p) {
     <article class="ig-card ${p.pinned ? 'pinned' : ''}">
       <header class="ig-head">
         ${avatarHTML(p, 'sm')}
-        <div class="ig-user">
+        <div class="ig-user" style="cursor:pointer" onclick="openProfile('${escapeHTML(normalizeHandle(p.handle))}')">
           <strong>${escapeHTML(p.name || p.handle)}</strong>
           <span>${displayHandle(p.handle)} · ${timeAgo(p.createdAt)}</span>
         </div>
@@ -236,13 +236,13 @@ function renderRightRail() {
     return;
   }
   list.innerHTML = items.map(u => `
-    <div class="rail-row">
+    <button type="button" class="rail-row" style="width:100%;text-align:left" onclick="openProfile('${escapeHTML(u.handle)}')">
       ${avatarHTML(u, 'sm')}
       <div class="rail-me-text">
         <strong>${escapeHTML(u.handle)}</strong>
         <span>${escapeHTML(u.name)}</span>
       </div>
       <span class="rail-tag">no ar</span>
-    </div>
+    </button>
   `).join('');
 }

@@ -27,6 +27,14 @@ function listenProfiles() {
   });
 }
 
+function listenNpcProfiles() {
+  db.ref('npcProfiles').on('value', snap => {
+    state.npcProfiles = snap.val() || {};
+    if (state.currentView === 'profile') renderProfile();
+    if (state.currentView === 'admin') renderAdmin();
+  });
+}
+
 function listenStories() {
   db.ref('stories').orderByChild('createdAt').limitToLast(30).on('value', snap => {
     const data = snap.val() || {};
