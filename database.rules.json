@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "isAdmin": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.val() === false || newData.val() == null)"
+        }
+      }
+    },
+    "handles": {
+      ".read": "auth != null",
+      "$handle": {
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
+      }
+    },
+    "posts": {
+      ".read": "auth != null",
+      ".indexOn": ["createdAt", "replyTo"],
+      "$pid": {
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        "likes": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "likeCount": {
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
