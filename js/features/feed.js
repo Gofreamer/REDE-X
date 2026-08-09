@@ -3,14 +3,27 @@ function renderFeed() {
   const el = document.getElementById('feed');
   if (!el) return;
 
-  const posts = [...state.posts].sort((a, b) => {
+  const now = Date.now();
+  const session = state.siteSettings?.session || {};
+  let posts = [...state.posts].filter(p => !p.publishAt || p.publishAt <= now || isUserAdmin());
+  posts.sort((a, b) => {
+    if (session.postId) {
+      if (a.id === session.postId && b.id !== session.postId) return -1;
+      if (b.id === session.postId && a.id !== session.postId) return 1;
+    }
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  const sessionBanner = session.postId || session.label ? `
+    <div class="session-banner">
+      <strong>Sessão</strong>
+      <span>${escapeHTML(session.label || 'No ar esta noite')}</span>
+    </div>` : '';
+
   if (!posts.length) {
-    el.innerHTML = `
+    el.innerHTML = sessionBanner + `
       <div class="empty">
         <div class="empty-glow"></div>
         <h3>Rede em silêncio</h3>
@@ -20,7 +33,7 @@ function renderFeed() {
     return;
   }
 
-  el.innerHTML = posts.map(renderPostCard).join('');
+  el.innerHTML = sessionBanner + posts.map(renderPostCard).join('');
   if (typeof renderRightRail === 'function') renderRightRail();
 }
 
@@ -74,6 +87,8 @@ function renderPostCard(p) {
           <span>${displayHandle(p.handle)} · ${timeAgo(p.createdAt)}</span>
         </div>
         ${p.pinned ? '<span class="pin-badge">Fixado</span>' : ''}
+        ${p.publishAt && p.publishAt > Date.now() ? '<span class="pin-badge">Agendado</span>' : ''}
+        ${state.siteSettings?.session?.postId === p.id ? '<span class="pin-badge">Sessão</span>' : ''}
         ${canMod ? `<button class="icon-btn" onclick="postMenu('${p.id}')" title="Opções">⋯</button>` : ''}
       </header>
 
@@ -163,6 +178,12 @@ function renderPostModal(id) {
             <button class="icon-btn ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')">${liked ? '♥' : '♡'}</button>
             <span class="ig-likes">${p.likeCount || 0} curtidas</span>
           </div>
+          ${isUserAdmin() ? `
+            <div class="admin-comment-as">
+              <input type="text" id="comment-as-handle" class="input input-sm" placeholder="comentar como @npc (vazio = você)"/>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="aiReplyComment('${p.id}')">IA reply</button>
+            </div>
+          ` : ''}
           <form class="comment-form" onsubmit="submitComment(event, '${p.id}')">
             <input type="text" id="comment-input" maxlength="240" placeholder="Adicione um comentário…" class="input"/>
             <button type="submit" class="btn btn-ghost btn-sm">Publicar</button>
@@ -176,7 +197,9 @@ async function submitComment(e, postId) {
   e.preventDefault();
   const input = document.getElementById('comment-input');
   const text = input?.value || '';
-  await addComment(postId, text);
+  const asH = document.getElementById('comment-as-handle')?.value?.trim();
+  const asNpc = asH && isUserAdmin() ? { handle: asH, name: asH } : null;
+  await addComment(postId, text, asNpc);
   if (input) input.value = '';
 }
 

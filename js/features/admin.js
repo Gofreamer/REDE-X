@@ -19,6 +19,26 @@ function renderAdmin() {
   el.innerHTML = `
     <div class="admin-stack">
       <section class="panel">
+        <h3>Mesa rápida</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="seedCityFeed()">Popular fio (seed)</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="promptSessionMode()">Modo sessão</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Seed cria 6 posts NPC + perfis. Sessão fixa um post no topo.</p>
+      </section>
+
+      <section class="panel">
+        <h3>IA — lote de legendas</h3>
+        <p class="hint">gemini-3.6-flash gera 3 legendas + handles sugeridos.</p>
+        <div class="form-group">
+          <label>Ideia da sessao / arco</label>
+          <textarea class="input" id="ai-batch-idea" rows="2" placeholder="Noite do show Nina no porto, boatos de bloqueio…"></textarea>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="generateBatchCaptions()">Gerar lote (3)</button>
+        <div id="ai-batch-out" class="hint" style="margin-top:10px;white-space:pre-wrap"></div>
+      </section>
+
+      <section class="panel">
         <h3>IA — gerar legenda</h3>
         <p class="hint">Firebase AI · gemini-3.6-flash (mesmo padrao GS). Voce so cola a URL da imagem depois.</p>
         <div class="form-row">
@@ -59,6 +79,10 @@ function renderAdmin() {
           <div class="form-group">
             <label>Legenda</label>
             <textarea class="input" id="adm-caption" rows="3" maxlength="500"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Agendar (opcional) — data/hora local</label>
+            <input class="input" id="adm-schedule" type="datetime-local"/>
           </div>
           <button type="submit" class="btn btn-primary">Publicar no fio</button>
         </form>
@@ -151,6 +175,21 @@ function renderAdmin() {
       </section>
 
       <section class="panel">
+        <h3>Fila agendada</h3>
+        <div class="mod-list">
+          ${state.posts.filter(p => p.publishAt && p.publishAt > Date.now()).map(p => `
+            <div class="mod-row">
+              <div>
+                <strong>${displayHandle(p.handle)}</strong>
+                <p>Publica ${new Date(p.publishAt).toLocaleString('pt-BR')} · ${escapeHTML((p.caption||'').slice(0,40))}</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="publishNow('${p.id}')">Publicar agora</button>
+            </div>
+          `).join('') || '<p class="text-muted">Nada agendado.</p>'}
+        </div>
+      </section>
+
+      <section class="panel">
         <h3>Moderacao</h3>
         <div class="mod-list">
           ${state.posts.slice(0, 15).map(p => `
@@ -171,17 +210,28 @@ function renderAdmin() {
 
 async function adminNpcPost(e) {
   e.preventDefault();
+  const sched = document.getElementById('adm-schedule')?.value;
+  let publishAt = null;
+  if (sched) publishAt = new Date(sched).getTime();
   const ok = await createPost({
     image: document.getElementById('adm-image').value,
     caption: document.getElementById('adm-caption').value,
     asHandle: document.getElementById('adm-handle').value,
-    asName: document.getElementById('adm-name').value
+    asName: document.getElementById('adm-name').value,
+    publishAt
   });
   if (ok) {
-    showToast('NPC publicado.');
+    showToast(publishAt && publishAt > Date.now() ? 'Post agendado.' : 'NPC publicado.');
     e.target.reset();
   }
 }
+
+async function promptSessionMode() {
+  const postId = prompt('ID do post da sessao (ou deixe vazio):', state.siteSettings?.session?.postId || '');
+  const label = prompt('Rotulo da sessao:', state.siteSettings?.session?.label || 'Sessao de hoje');
+  await setSessionMode({ postId: postId || null, label });
+}
+
 
 async function adminSubmitStory(e) {
   e.preventDefault();
@@ -214,5 +264,15 @@ async function adminSaveNpcProfile(e) {
   } catch (err) {
     console.error(err);
     showToast('Erro ao salvar NPC.', 'err');
+  }
+}
+
+
+async function publishNow(postId) {
+  try {
+    await db.ref('posts/' + postId).update({ publishAt: null, scheduled: false, createdAt: Date.now() });
+    showToast('No ar agora.');
+  } catch (e) {
+    showToast('Erro.', 'err');
   }
 }

@@ -28,9 +28,8 @@ function renderProfile() {
             <h2 class="ig-username">${escapeHTML(bundle.handle)}</h2>
             ${isMe
               ? `<button type="button" class="btn btn-edit" onclick="openEditProfile()">Editar perfil</button>`
-              : (isUserAdmin()
-                  ? `<button type="button" class="btn btn-edit" onclick="openEditNpc('${escapeHTML(bundle.handle)}')">Editar NPC</button>`
-                  : '')}
+              : `<button type="button" class="btn btn-edit" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">Mensagem</button>
+                 ${isUserAdmin() ? `<button type="button" class="btn btn-edit" onclick="openEditNpc('${escapeHTML(bundle.handle)}')">Editar NPC</button>` : ''}`}
           </div>
           <div class="ig-stats">
             <div class="ig-stat"><strong>${posts.length}</strong><span>publicacoes</span></div>
@@ -55,6 +54,8 @@ function renderProfile() {
               ? `<button type="button" class="btn btn-edit btn-block" style="margin-top:12px" onclick="openEditProfile()">Editar NPC</button>`
               : '')}
       </div>
+
+      ${renderHighlightsStrip(bundle.handle, isMe)}
 
       <div class="ig-profile-tabs">
         <button type="button" class="ig-tab active">Publicacoes</button>
@@ -176,4 +177,53 @@ async function submitEditProfile(e) {
     console.error(err);
     showToast('Erro ao salvar.', 'err');
   }
+}
+
+
+function renderHighlightsStrip(handle, isMe) {
+  const h = normalizeHandle(handle);
+  const items = Object.entries(state.highlights?.[h] || {})
+    .map(([id, x]) => ({ id, ...x }));
+  const canEdit = isMe || isUserAdmin();
+  if (!items.length && !canEdit) return '';
+  return `
+    <div class="ig-highlights">
+      ${canEdit ? `
+        <button type="button" class="hl-item" onclick="promptAddHighlight('${escapeHTML(h)}')">
+          <div class="hl-ring"><span>+</span></div>
+          <span>Novo</span>
+        </button>` : ''}
+      ${items.map(it => `
+        <button type="button" class="hl-item" onclick="openHighlight('${escapeHTML(h)}','${it.id}')">
+          <div class="hl-ring"><img src="${escapeHTML(it.image)}" alt="" onerror="this.remove()"/></div>
+          <span>${escapeHTML(it.title || 'Destaque')}</span>
+        </button>
+      `).join('')}
+    </div>`;
+}
+
+async function promptAddHighlight(handle) {
+  const title = prompt('Titulo do destaque (ex: Tour):', 'Destaque');
+  if (title === null) return;
+  const image = prompt('URL da imagem:');
+  if (!image) return;
+  await addHighlight(handle, { title, image });
+  renderProfile();
+}
+
+function openHighlight(handle, hid) {
+  const it = state.highlights?.[normalizeHandle(handle)]?.[hid];
+  if (!it) return;
+  const modal = document.getElementById('story-modal');
+  const body = document.getElementById('story-modal-body');
+  if (!modal || !body) return;
+  body.innerHTML = `
+    <div class="story-full" onclick="closeStory()">
+      <div class="story-full-top">
+        <strong>${escapeHTML(it.title || 'Destaque')}</strong>
+        ${isUserAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();deleteHighlight('${escapeHTML(handle)}','${hid}');closeStory();renderProfile()">Apagar</button>` : ''}
+      </div>
+      <img src="${escapeHTML(it.image)}" alt=""/>
+    </div>`;
+  modal.classList.add('open');
 }

@@ -21,11 +21,38 @@
         ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
       }
     },
+    "highlights": {
+      ".read": "auth != null",
+      "$handle": {
+        ".write": "auth != null"
+      }
+    },
+    "siteSettings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "dms": {
+      ".read": "auth != null",
+      "$tid": {
+        ".write": "auth != null",
+        "messages": {
+          "$mid": {
+            ".write": "auth != null"
+          }
+        }
+      }
+    },
     "posts": {
       ".read": "auth != null",
       ".indexOn": ["createdAt"],
       "$pid": {
-        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned'))",
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned') || newData.hasChild('publishAt') || newData.hasChild('scheduled'))",
         "likes": {
           "$uid": { ".write": "auth != null && auth.uid === $uid" }
         },

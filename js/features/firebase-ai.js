@@ -121,3 +121,76 @@ Responda APENAS com a legenda.`;
 
 window.generatePostWithAI = generatePostWithAI;
 window.jetStyleGenerate = jetStyleGenerate;
+
+async function generateBatchCaptions() {
+  const idea = document.getElementById('ai-batch-idea')?.value.trim();
+  const out = document.getElementById('ai-batch-out');
+  if (!idea) {
+    if (typeof showToast === 'function') showToast('Descreva o arco da sessão.', 'err');
+    return;
+  }
+  if (out) out.textContent = 'Gerando lote…';
+  const prompt = `Você é social media da Rede Global (RPG in-world).
+Dado o arco: ${idea}
+Gere EXATAMENTE 3 posts em JSON array:
+[{"handle":"sem_@","name":"Nome","caption":"legenda max 200 chars com hashtag"}]
+Handles inventados de mídia/NPC da cidade. Só o JSON.`;
+  try {
+    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    const a = text.indexOf('[');
+    const b = text.lastIndexOf(']');
+    let arr = [];
+    if (a !== -1 && b > a) arr = JSON.parse(text.slice(a, b + 1));
+    if (!Array.isArray(arr) || !arr.length) throw new Error('JSON inválido');
+    window.__rgAiBatch = arr;
+    if (out) {
+      out.innerHTML = arr.map((x, i) =>
+        `<div style="margin:8px 0;padding:8px;border:1px solid #333;border-radius:8px">
+          <strong>@${x.handle}</strong> — ${x.name}<br/>${x.caption}
+          <br/><button type="button" class="btn btn-ghost btn-sm" onclick="applyBatchItem(${i})">Usar no form</button>
+        </div>`
+      ).join('');
+    }
+    if (typeof showToast === 'function') showToast('Lote gerado.');
+  } catch (e) {
+    console.error(e);
+    if (out) out.textContent = 'Falha: ' + (e.message || e);
+  }
+}
+
+function applyBatchItem(i) {
+  const x = (window.__rgAiBatch || [])[i];
+  if (!x) return;
+  const h = document.getElementById('adm-handle');
+  const n = document.getElementById('adm-name');
+  const c = document.getElementById('adm-caption');
+  if (h) h.value = String(x.handle || '').replace(/^@/, '');
+  if (n) n.value = x.name || x.handle || '';
+  if (c) c.value = x.caption || '';
+  if (typeof showToast === 'function') showToast('Preenchido — cole a imagem e publique.');
+}
+
+async function aiReplyComment(postId) {
+  const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
+  if (!post) return;
+  const handle = document.getElementById('comment-as-handle')?.value?.trim() || 'nina_riders';
+  const statusIdea = post.caption || '';
+  try {
+    if (typeof showToast === 'function') showToast('IA respondendo…');
+    const prompt = `Responda em 1 comentário curto (max 120 chars) como @${handle} no post: "${statusIdea}".
+Português BR, tom in-world. Só o texto do comentário.`;
+    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    text = String(text || '').trim().replace(/^["']|["']$/g, '').slice(0, 240);
+    const input = document.getElementById('comment-input');
+    if (input) input.value = text;
+    if (typeof showToast === 'function') showToast('Reply pronto — publique.');
+  } catch (e) {
+    console.error(e);
+    if (typeof showToast === 'function') showToast('Erro IA reply.', 'err');
+  }
+}
+
+window.generateBatchCaptions = generateBatchCaptions;
+window.applyBatchItem = applyBatchItem;
+window.aiReplyComment = aiReplyComment;
+

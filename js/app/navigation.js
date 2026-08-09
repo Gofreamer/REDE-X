@@ -3,9 +3,6 @@ function showView(view) {
   if (view === 'profile' && !state.viewProfileHandle && state.profile?.handle) {
     state.viewProfileHandle = state.profile.handle;
   }
-  if (view === 'feed') {
-    // keep last profile handle for back, no clear required
-  }
   document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
   document.getElementById('view-' + view)?.classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b => {
@@ -17,6 +14,8 @@ function showView(view) {
   if (view === 'feed') renderFeed();
   if (view === 'profile') renderProfile();
   if (view === 'admin') renderAdmin();
+  if (view === 'notifications') renderNotifications();
+  if (view === 'dms') renderDMs();
   if (typeof renderRightRail === 'function') renderRightRail();
 }
 

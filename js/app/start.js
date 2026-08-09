@@ -7,12 +7,18 @@ auth.onAuthStateChanged(user => {
     listenProfiles();
     listenStories();
     listenNpcProfiles();
+    listenHighlights();
+    listenSiteSettings();
+    listenNotifications(user.uid);
+    listenDMs(user.uid);
     showView('feed');
   } else {
     state.user = null;
     state.profile = null;
     state.posts = [];
     state.stories = [];
+    state.notifications = [];
+    state.dmThreads = [];
     showAuth();
   }
 });

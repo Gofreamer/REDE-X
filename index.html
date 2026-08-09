@@ -68,6 +68,14 @@
         <button type="button" class="side-link" onclick="openSearch()">
           <span class="side-ico">⌕</span><span class="side-label">Pesquisar</span>
         </button>
+        <button type="button" class="side-link" data-view="notifications" onclick="showView('notifications')">
+          <span class="side-ico">♡</span><span class="side-label">Notificações</span>
+          <span class="nav-badge badge-notif hidden">0</span>
+        </button>
+        <button type="button" class="side-link" data-view="dms" onclick="showView('dms')">
+          <span class="side-ico">✈</span><span class="side-label">Mensagens</span>
+          <span class="nav-badge badge-dm hidden">0</span>
+        </button>
         <button type="button" class="side-link" data-view="profile" onclick="goMyProfile()">
           <span class="side-ico">◎</span><span class="side-label">Perfil</span>
         </button>
@@ -103,6 +111,12 @@
         <section id="view-admin" class="view hidden">
           <div id="admin-root"></div>
         </section>
+        <section id="view-notifications" class="view hidden">
+          <div id="notifications-root"></div>
+        </section>
+        <section id="view-dms" class="view hidden">
+          <div id="dms-root"></div>
+        </section>
       </main>
     </div>
 
@@ -128,6 +142,10 @@
       </button>
       <button type="button" class="tab-btn" onclick="openSearch()">
         <span class="tab-ico">⌕</span>
+      </button>
+      <button type="button" class="tab-btn" data-view="dms" onclick="showView('dms')">
+        <span class="tab-ico">✈</span>
+        <span class="nav-badge badge-dm hidden" style="position:absolute">0</span>
       </button>
       <button type="button" class="tab-btn" data-view="profile" onclick="goMyProfile()">
         <span class="tab-ico">◎</span>
@@ -224,6 +242,8 @@
   <script src="./js/features/feed.js"></script>
   <script src="./js/features/compose.js"></script>
   <script src="./js/features/search.js"></script>
+  <script src="./js/features/notifications.js"></script>
+  <script src="./js/features/dms.js"></script>
   <script src="./js/features/profile.js"></script>
     <script src="./js/features/admin.js"></script>
   <script src="./js/app/navigation.js"></script>
