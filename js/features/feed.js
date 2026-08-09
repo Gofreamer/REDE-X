@@ -3,9 +3,22 @@ function renderFeed() {
   const el = document.getElementById('feed');
   if (!el) return;
 
+  if (!state.postsLoaded) {
+    el.innerHTML = skeletonFeedHTML();
+    return;
+  }
+
   const now = Date.now();
   const session = state.siteSettings?.session || {};
   let posts = [...state.posts].filter(p => !p.publishAt || p.publishAt <= now || isUserAdmin());
+
+  if (state.feedFilter === 'following') {
+    posts = posts.filter(p => isFollowing(p.handle) || (state.profile && normalizeHandle(p.handle) === normalizeHandle(state.profile.handle)));
+  } else if (state.feedFilter === 'tag' && state.feedTag) {
+    const tag = state.feedTag.toLowerCase();
+    posts = posts.filter(p => (p.caption || '').toLowerCase().includes('#' + tag));
+  }
+
   posts.sort((a, b) => {
     if (session.postId) {
       if (a.id === session.postId && b.id !== session.postId) return -1;
@@ -16,6 +29,14 @@ function renderFeed() {
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  const filterBar = `
+    <div class="feed-filters">
+      <button type="button" class="ff-btn ${state.feedFilter === 'all' ? 'active' : ''}" onclick="setFeedFilter('all')">Para você</button>
+      <button type="button" class="ff-btn ${state.feedFilter === 'following' ? 'active' : ''}" onclick="setFeedFilter('following')">Seguindo</button>
+      ${state.feedFilter === 'tag' && state.feedTag ? `<button type="button" class="ff-btn active" onclick="setFeedFilter('all')">#${escapeHTML(state.feedTag)} ✕</button>` : ''}
+      <button type="button" class="ff-btn ff-refresh" onclick="refreshFeed()" title="Atualizar">↻</button>
+    </div>`;
+
   const sessionBanner = session.postId || session.label ? `
     <div class="session-banner">
       <strong>Sessão</strong>
@@ -23,19 +44,56 @@ function renderFeed() {
     </div>` : '';
 
   if (!posts.length) {
-    el.innerHTML = sessionBanner + `
+    el.innerHTML = filterBar + sessionBanner + `
       <div class="empty">
         <div class="empty-glow"></div>
-        <h3>Rede em silêncio</h3>
-        <p>Nenhuma publicação ainda. O mundo visual começa com uma imagem.</p>
-        <button class="btn btn-primary" onclick="openCompose()">Publicar</button>
+        <h3>${state.feedFilter === 'following' ? 'Nada de quem você segue' : (state.feedFilter === 'tag' ? 'Nenhum post com #' + escapeHTML(state.feedTag || '') : 'Rede em silêncio')}</h3>
+        <p>${state.feedFilter === 'following' ? 'Siga NPCs nos perfis — o fio fica só com o que importa pra você.' : 'A cidade ainda não postou. Explore ou publique.'}</p>
+        <button class="btn btn-primary" onclick="setFeedFilter('all')">Ver tudo</button>
       </div>`;
     return;
   }
 
-  el.innerHTML = sessionBanner + posts.map(renderPostCard).join('');
+  el.innerHTML = filterBar + sessionBanner + posts.map(renderPostCard).join('');
   if (typeof renderRightRail === 'function') renderRightRail();
 }
+
+function skeletonFeedHTML() {
+  return `<div class="feed-filters"><div class="sk sk-line"></div></div>` +
+    [1,2,3].map(() => `
+      <article class="ig-card sk-card">
+        <div class="ig-head"><div class="sk sk-avatar"></div><div class="sk sk-line" style="flex:1"></div></div>
+        <div class="sk sk-media"></div>
+        <div class="ig-meta"><div class="sk sk-line"></div><div class="sk sk-line short"></div></div>
+      </article>`).join('');
+}
+
+function setFeedFilter(mode) {
+  state.feedFilter = mode;
+  if (mode !== 'tag') state.feedTag = null;
+  renderFeed();
+}
+
+function filterByTag(tag) {
+  state.feedFilter = 'tag';
+  state.feedTag = String(tag || '').toLowerCase().replace(/^#/, '');
+  showView('feed');
+}
+
+function refreshFeed() {
+  state.postsLoaded = false;
+  renderFeed();
+  // force re-read
+  db.ref('posts').limitToLast(1).once('value').then(() => {
+    state.postsLoaded = true;
+    renderFeed();
+    showToast('Fio atualizado.');
+  }).catch(() => {
+    state.postsLoaded = true;
+    renderFeed();
+  });
+}
+
 
 function renderStories() {
   const el = document.getElementById('stories');
@@ -84,7 +142,7 @@ function renderPostCard(p) {
         ${avatarHTML(p, 'sm')}
         <div class="ig-user" style="cursor:pointer" onclick="openProfile('${escapeHTML(normalizeHandle(p.handle))}')">
           <strong>${escapeHTML(p.name || p.handle)}</strong>
-          <span>${displayHandle(p.handle)} · ${timeAgo(p.createdAt)}</span>
+          <span>${displayHandle(p.handle)} · <span data-ts="${p.createdAt || ''}">${timeAgo(p.createdAt)}</span></span>
         </div>
         ${p.pinned ? '<span class="pin-badge">Fixado</span>' : ''}
         ${p.publishAt && p.publishAt > Date.now() ? '<span class="pin-badge">Agendado</span>' : ''}
@@ -92,7 +150,7 @@ function renderPostCard(p) {
         ${canMod ? `<button class="icon-btn" onclick="postMenu('${p.id}')" title="Opções">⋯</button>` : ''}
       </header>
 
-      <div class="ig-media" ondblclick="toggleLike('${p.id}')">
+      <div class="ig-media" ondblclick="heartBurst(event, '${p.id}')">
         <img src="${escapeHTML(p.image)}" alt="" loading="lazy"
              onerror="this.parentElement.classList.add('broken'); this.alt='imagem indisponível'"/>
       </div>
@@ -189,7 +247,7 @@ function renderPostModal(id) {
               </div>
               <div class="apt-row">
                 <label>Coments</label>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 3)">+3 auto</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="aiReplyComment('${p.id}')">IA reply</button>
               </div>
@@ -204,6 +262,7 @@ function renderPostModal(id) {
               <div class="apt-row">
                 <button type="button" class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}')">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="setSessionMode({ postId: '${p.id}', label: 'Sessão' })">Sessão</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminOpenTimeEditor('${p.id}')">Horário</button>
                 <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deletePost('${p.id}')">Apagar</button>
               </div>
             </div>
@@ -402,5 +461,92 @@ async function adminGenerateComments(postId, count = 3) {
   } catch (e) {
     console.error(e);
     showToast('Erro nos comentários.', 'err');
+  }
+}
+
+
+function heartBurst(e, postId) {
+  const media = e.currentTarget;
+  const heart = document.createElement('div');
+  heart.className = 'heart-burst';
+  heart.textContent = '♥';
+  media.appendChild(heart);
+  requestAnimationFrame(() => heart.classList.add('show'));
+  setTimeout(() => heart.remove(), 900);
+  const post = state.posts.find(p => p.id === postId);
+  const liked = !!(state.user && post?.likes && post.likes[state.user.uid]);
+  if (!liked) toggleLike(postId);
+}
+
+
+async function adminOpenTimeEditor(postId) {
+  if (!isUserAdmin()) return;
+  const post = state.posts.find(p => p.id === postId);
+  const data = await rgForm({
+    title: 'Horário do post',
+    confirmLabel: 'Aplicar',
+    fields: [
+      { name: 'mode', label: 'Modo', type: 'select', value: 'ago', options: [
+        { value: 'ago', label: 'Há X minutos (relativo)' },
+        { value: 'absolute', label: 'Data/hora exata' }
+      ]},
+      { name: 'minutes', label: 'Há quantos minutos?', type: 'number', value: '15', placeholder: '15' },
+      { name: 'datetime', label: 'Ou data/hora', type: 'datetime-local', value: '' }
+    ]
+  });
+  if (!data) return;
+  if (data.mode === 'absolute' && data.datetime) {
+    await adminSetPostTime(postId, data.datetime);
+  } else {
+    const m = Math.max(0, parseInt(data.minutes, 10) || 0);
+    await adminSetPostTime(postId, m);
+  }
+}
+
+async function adminPreviewComments(postId, count = 3) {
+  if (!isUserAdmin()) return;
+  const post = state.posts.find(p => p.id === postId);
+  if (!post) return;
+  const npcs = Object.entries(state.npcProfiles || {});
+  const handles = npcs.length
+    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h }))
+    : [
+        { handle: 'porto_wire', name: 'Porto Wire' },
+        { handle: 'nexo_pulse', name: 'Nexo Pulse' },
+        { handle: 'dock_cam', name: 'Dock Cam' }
+      ];
+  const draft = [];
+  for (let i = 0; i < count; i++) {
+    const who = handles[Math.floor(Math.random() * handles.length)];
+    draft.push({ handle: who.handle, name: who.name, text: pickCommentText(post.caption) });
+  }
+  const body = draft.map((d, i) =>
+    `<div style="text-align:left;margin:8px 0;padding:8px;background:#121212;border-radius:8px">
+      <strong>@${escapeHTML(d.handle)}</strong><br/>${escapeHTML(d.text)}
+    </div>`
+  ).join('');
+  const ok = await rgConfirm({
+    title: 'Publicar comentários?',
+    body: body,
+    confirmLabel: 'Publicar ' + count
+  });
+  if (!ok) return;
+  try {
+    for (const d of draft) {
+      await db.ref('posts/' + postId + '/comments').push({
+        text: d.text,
+        uid: 'npc_' + d.handle,
+        handle: d.handle,
+        name: d.name,
+        createdAt: Date.now() - Math.floor(Math.random() * 3600000),
+        bot: true
+      });
+    }
+    const snap = await db.ref('posts/' + postId + '/comments').once('value');
+    const n = snap.exists() ? Object.keys(snap.val()).length : 0;
+    await db.ref('posts/' + postId + '/commentCount').set(n);
+    showToast(count + ' comentários publicados.');
+  } catch (e) {
+    showToast('Erro.', 'err');
   }
 }

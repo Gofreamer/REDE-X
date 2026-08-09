@@ -4,7 +4,7 @@ function renderNotifications() {
   markNotifsRead();
 
   if (!state.notifications.length) {
-    el.innerHTML = `<div class="empty"><h3>Sem notificações</h3><p>Curtidas, comentários e menções aparecem aqui.</p></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-glow"></div><h3>Tudo quieto</h3><p>Quando curtirem, comentarem ou te mencionarem, o sinal chega aqui.</p></div>`;
     return;
   }
 

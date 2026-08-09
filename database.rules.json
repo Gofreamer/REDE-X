@@ -21,6 +21,16 @@
         ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
       }
     },
+    "following": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "mediaLibrary": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+    },
     "highlights": {
       ".read": "auth != null",
       "$handle": {
@@ -52,7 +62,7 @@
       ".read": "auth != null",
       ".indexOn": ["createdAt"],
       "$pid": {
-        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned') || newData.hasChild('publishAt') || newData.hasChild('scheduled'))",
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned') || newData.hasChild('publishAt') || newData.hasChild('scheduled') || newData.hasChild('createdAt') || newData.hasChild('timeOverride'))",
         "likes": {
           "$uid": { ".write": "auth != null && auth.uid === $uid" }
         },

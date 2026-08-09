@@ -84,6 +84,7 @@ function renderDmChat(thread) {
       <button type="button" class="icon-btn mobile-only" onclick="state.activeDmId=null;renderDMs()">←</button>
       <strong>${displayHandle(other?.handle)}</strong>
       <button type="button" class="btn btn-ghost btn-sm" onclick="openProfile('${escapeHTML(other?.handle || '')}')">Perfil</button>
+      ${isUserAdmin() || true ? `<button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deleteDmThread('${thread.id}')">Apagar</button>` : ''}
     </div>
     <div class="dm-messages" id="dm-messages">
       ${msgs.map(m => `
@@ -304,4 +305,23 @@ async function startDmWithHandle(handle) {
 
 async function adminStartDmPrompt() {
   await openNewDmModal();
+}
+
+
+async function deleteDmThread(threadId) {
+  const ok = await rgConfirm({
+    title: 'Apagar conversa',
+    body: 'Remove o histórico inteiro do Firebase. Não dá pra desfazer.',
+    confirmLabel: 'Apagar',
+    danger: true
+  });
+  if (!ok) return;
+  try {
+    await db.ref('dms/' + threadId).remove();
+    if (state.activeDmId === threadId) state.activeDmId = null;
+    showToast('Conversa apagada.');
+    renderDMs();
+  } catch (e) {
+    showToast('Erro ao apagar DM.', 'err');
+  }
 }

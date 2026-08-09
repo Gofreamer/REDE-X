@@ -4,18 +4,27 @@ function renderProfile() {
   const el = document.getElementById('profile-root');
   if (!el) return;
 
+  if (!state.postsLoaded && !state.profile) {
+    el.innerHTML = `<div class="ig-profile"><div class="ig-profile-header"><div class="sk sk-avatar xl"></div><div style="flex:1"><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div></div>`;
+    return;
+  }
+
   const handle = state.viewProfileHandle || state.profile?.handle;
   if (!handle) {
-    el.innerHTML = `<div class="empty"><h3>Sem perfil</h3></div>`;
+    el.innerHTML = `<div class="empty"><h3>Sinal fraco</h3><p>Nenhum perfil neste handle.</p></div>`;
     return;
   }
 
   const bundle = getProfileBundle(handle);
   const posts = postsForHandle(handle);
   const isMe = bundle.isMe;
+  const suspended = !!(bundle.suspended || bundle.banned);
+  const banned = !!bundle.banned;
 
   el.innerHTML = `
-    <div class="ig-profile">
+    <div class="ig-profile ${banned ? 'profile-banned' : (suspended ? 'profile-suspended' : '')}">
+      ${banned ? `<div class="account-status-banner banned"><strong>Conta banida</strong><span>Esta conta foi desativada permanentemente pela Rede Global.</span></div>` : ''}
+      ${suspended && !banned ? `<div class="account-status-banner suspended"><strong>Conta suspensa</strong><span>Atividade limitada · decisão da moderação da cidade.</span></div>` : ''}
       <div class="ig-profile-top mobile-only">
         <strong>${escapeHTML(bundle.handle)}</strong>
         ${isMe ? `<button type="button" class="icon-btn" onclick="openEditProfile()">⚙</button>` : ''}
@@ -28,7 +37,11 @@ function renderProfile() {
             <h2 class="ig-username">${escapeHTML(bundle.handle)}</h2>
             ${isMe
               ? `<button type="button" class="btn btn-edit" onclick="openEditProfile()">Editar perfil</button>`
-              : `<button type="button" class="btn btn-edit" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">Mensagem</button>
+              : `${bundle.kind === 'npc' || !bundle.isMe ? `
+                  <button type="button" class="btn ${isFollowing(bundle.handle) ? 'btn-edit' : 'btn-follow'}" onclick="toggleFollow('${escapeHTML(bundle.handle)}')">
+                    ${isFollowing(bundle.handle) ? 'Seguindo' : 'Seguir'}
+                  </button>` : ''}
+                 <button type="button" class="btn btn-edit" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">Mensagem</button>
                  ${isUserAdmin() ? `<button type="button" class="btn btn-edit" onclick="openEditNpc('${escapeHTML(bundle.handle)}')">Editar NPC</button>` : ''}`}
           </div>
           <div class="ig-stats">
@@ -44,6 +57,10 @@ function renderProfile() {
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminBoostProfile('${escapeHTML(bundle.handle)}')">Boost seguidores</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">DM</button>
                 ${bundle.kind === 'npc' ? `<button type="button" class="btn btn-ghost btn-sm" onclick="quickFillNpc('${escapeHTML(bundle.handle)}')">Postar como</button>` : ''}
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminSuspendAccount('${escapeHTML(bundle.handle)}','${escapeHTML(bundle.kind)}',false)">Suspender</button>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="adminSuspendAccount('${escapeHTML(bundle.handle)}','${escapeHTML(bundle.kind)}',true)">Banir</button>
+                ${bundle.kind === 'npc' ? `<button type="button" class="btn btn-ghost btn-sm text-danger" onclick="adminDeleteNpc('${escapeHTML(bundle.handle)}')">Apagar NPC</button>` : ''}
+                ${bundle.suspended || bundle.banned ? `<button type="button" class="btn btn-ghost btn-sm" onclick="adminUnsuspend('${escapeHTML(bundle.handle)}','${escapeHTML(bundle.kind)}')">Reativar</button>` : ''}
               </div>
             </div>
           ` : ''}
@@ -61,9 +78,11 @@ function renderProfile() {
         ${bundle.kind === 'npc' ? `<div class="ig-badge-npc">Conta da mesa · NPC</div>` : ''}
         ${isMe
           ? `<button type="button" class="btn btn-edit btn-block" style="margin-top:12px" onclick="openEditProfile()">Editar perfil</button>`
-          : (isUserAdmin()
-              ? `<button type="button" class="btn btn-edit btn-block" style="margin-top:12px" onclick="openEditProfile()">Editar NPC</button>`
-              : '')}
+          : `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+              <button type="button" class="btn ${isFollowing(bundle.handle) ? 'btn-edit' : 'btn-follow'}" style="flex:1" onclick="toggleFollow('${escapeHTML(bundle.handle)}')">${isFollowing(bundle.handle) ? 'Seguindo' : 'Seguir'}</button>
+              <button type="button" class="btn btn-edit" style="flex:1" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">Mensagem</button>
+            </div>
+            ${isUserAdmin() ? `<button type="button" class="btn btn-edit btn-block" style="margin-top:8px" onclick="openEditProfile()">Editar NPC</button>` : ''}`}
       </div>
 
       ${renderHighlightsStrip(bundle.handle, isMe)}
@@ -279,5 +298,74 @@ async function adminBoostProfile(handle) {
     renderProfile();
   } catch (e) {
     showToast('Erro no boost.', 'err');
+  }
+}
+
+
+async function adminSuspendAccount(handle, kind, ban) {
+  if (!isUserAdmin()) return;
+  const ok = await rgConfirm({
+    title: ban ? 'Banir conta' : 'Suspender conta',
+    body: ban
+      ? 'Ban permanente visual em @' + handle + '. Pode reativar depois.'
+      : 'Suspende @' + handle + ' com aviso no perfil.',
+    confirmLabel: ban ? 'Banir' : 'Suspender',
+    danger: true
+  });
+  if (!ok) return;
+  const h = normalizeHandle(handle);
+  const payload = ban
+    ? { banned: true, suspended: true, statusAt: Date.now() }
+    : { suspended: true, banned: false, statusAt: Date.now() };
+  try {
+    if (kind === 'user') {
+      const entry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+      if (entry) await db.ref('users/' + entry[0]).update(payload);
+    } else {
+      await db.ref('npcProfiles/' + h).update(payload);
+    }
+    showToast(ban ? 'Conta banida.' : 'Conta suspensa.');
+    renderProfile();
+  } catch (e) {
+    showToast('Erro.', 'err');
+  }
+}
+
+async function adminUnsuspend(handle, kind) {
+  if (!isUserAdmin()) return;
+  const h = normalizeHandle(handle);
+  const payload = { banned: false, suspended: false, statusAt: Date.now() };
+  try {
+    if (kind === 'user') {
+      const entry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+      if (entry) await db.ref('users/' + entry[0]).update(payload);
+    } else {
+      await db.ref('npcProfiles/' + h).update(payload);
+    }
+    showToast('Conta reativada.');
+    renderProfile();
+  } catch (e) {
+    showToast('Erro.', 'err');
+  }
+}
+
+async function adminDeleteNpc(handle) {
+  if (!isUserAdmin()) return;
+  const h = normalizeHandle(handle);
+  const ok = await rgConfirm({
+    title: 'Apagar NPC',
+    body: 'Remove @' + h + ' do Firebase (perfil). Posts antigos permanecem no fio.',
+    confirmLabel: 'Apagar',
+    danger: true
+  });
+  if (!ok) return;
+  try {
+    await db.ref('npcProfiles/' + h).remove();
+    await db.ref('highlights/' + h).remove();
+    showToast('NPC removido.');
+    state.viewProfileHandle = state.profile?.handle || null;
+    showView('feed');
+  } catch (e) {
+    showToast('Erro ao apagar NPC.', 'err');
   }
 }

@@ -82,7 +82,7 @@ function renderSearchResults(query) {
     );
   }
   if (!list.length) {
-    el.innerHTML = `<p class="rail-empty">Nenhum perfil encontrado.</p>`;
+    el.innerHTML = `<div class="empty" style="padding:32px 12px"><h3>Nada no radar</h3><p>Nenhum @ ou nome bate com a busca. A cidade é grande.</p></div>`;
     return;
   }
   el.innerHTML = list.slice(0, 40).map(p => `
@@ -116,7 +116,9 @@ function getProfileBundle(handle) {
       avatar: u.avatar || '',
       followers: Number(u.followersCount) || 0,
       following: Number(u.followingCount) || 0,
-      isMe: state.user && uid === state.user.uid
+      isMe: state.user && uid === state.user.uid,
+      suspended: !!u.suspended,
+      banned: !!u.banned
     };
   }
   const npc = (state.npcProfiles || {})[h] || {};
@@ -130,7 +132,9 @@ function getProfileBundle(handle) {
     avatar: npc.avatar || post?.avatar || '',
     followers: Number(npc.followersCount) || 0,
     following: Number(npc.followingCount) || 0,
-    isMe: false
+    isMe: false,
+    suspended: !!npc.suspended,
+    banned: !!npc.banned
   };
 }
 

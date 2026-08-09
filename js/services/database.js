@@ -22,6 +22,7 @@ function listenPosts() {
     if (state.currentView === 'profile') renderProfile();
     if (state.currentView === 'admin') renderAdmin();
     if (state.activePost) renderPostModal(state.activePost);
+    state.postsLoaded = true;
     checkNotifFromPosts();
   });
 }
@@ -102,8 +103,10 @@ async function createPost({ caption, image, asHandle, asName, publishAt }) {
 
   try {
     const ref = await db.ref('posts').push(post);
-    // mencoes @handle no caption -> notif
     await notifyMentions(text, ref.key, handle);
+    if (isUserAdmin() && img) {
+      try { await saveMediaUrl(img, handle); } catch (_) {}
+    }
     return true;
   } catch (e) {
     console.error(e);
@@ -496,5 +499,103 @@ async function seedCityFeed() {
   } catch (e) {
     console.error(e);
     showToast('Erro no seed.', 'err');
+  }
+}
+
+
+function listenFollowing(uid) {
+  db.ref('following/' + uid).on('value', snap => {
+    state.following = snap.val() || {};
+    if (state.currentView === 'feed') renderFeed();
+    if (state.currentView === 'profile') renderProfile();
+  });
+}
+
+function listenMediaLibrary() {
+  db.ref('mediaLibrary').on('value', snap => {
+    const data = snap.val() || {};
+    state.mediaLibrary = Object.entries(data)
+      .map(([id, m]) => ({ id, ...m }))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    if (state.currentView === 'admin') renderAdmin();
+  });
+}
+
+function isFollowing(handle) {
+  const h = normalizeHandle(handle);
+  return !!(state.following && state.following[h]);
+}
+
+async function toggleFollow(handle) {
+  if (!state.user) return;
+  const h = normalizeHandle(handle);
+  if (!h) return;
+  const path = 'following/' + state.user.uid + '/' + h;
+  try {
+    if (isFollowing(h)) {
+      await db.ref(path).remove();
+      // decrement soft count if npc
+      const npc = state.npcProfiles?.[h];
+      if (npc) {
+        const n = Math.max(0, (Number(npc.followersCount) || 0) - 1);
+        await db.ref('npcProfiles/' + h + '/followersCount').set(n);
+      }
+      showToast('Deixou de seguir @' + h);
+    } else {
+      await db.ref(path).set({ at: Date.now(), handle: h });
+      const npc = state.npcProfiles?.[h];
+      if (npc) {
+        const n = (Number(npc.followersCount) || 0) + 1;
+        await db.ref('npcProfiles/' + h + '/followersCount').set(n);
+      }
+      showToast('Seguindo @' + h);
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao seguir.', 'err');
+  }
+}
+
+async function saveMediaUrl(url, label) {
+  if (!isUserAdmin() || !(url || '').trim()) return;
+  try {
+    await db.ref('mediaLibrary').push({
+      url: url.trim(),
+      label: (label || '').slice(0, 40),
+      createdAt: Date.now()
+    });
+    showToast('Salvo na biblioteca.');
+  } catch (e) {
+    showToast('Erro na biblioteca.', 'err');
+  }
+}
+
+async function deleteMediaItem(id) {
+  if (!isUserAdmin()) return;
+  try {
+    await db.ref('mediaLibrary/' + id).remove();
+  } catch (e) {
+    showToast('Erro.', 'err');
+  }
+}
+
+async function adminSetPostTime(postId, isoOrOffset) {
+  if (!isUserAdmin()) return;
+  // isoOrOffset: datetime-local string OR minutes ago number prefixed with -
+  try {
+    let ts = Date.now();
+    if (typeof isoOrOffset === 'number') {
+      ts = Date.now() - isoOrOffset * 60000;
+    } else if (isoOrOffset) {
+      const t = new Date(isoOrOffset).getTime();
+      if (!isNaN(t)) ts = t;
+    }
+    await db.ref('posts/' + postId).update({
+      createdAt: ts,
+      timeOverride: true
+    });
+    showToast('Horário do post ajustado.');
+  } catch (e) {
+    showToast('Erro no horário.', 'err');
   }
 }

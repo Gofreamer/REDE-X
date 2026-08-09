@@ -11,6 +11,8 @@ auth.onAuthStateChanged(user => {
     listenSiteSettings();
     listenNotifications(user.uid);
     listenDMs(user.uid);
+    listenFollowing(user.uid);
+    listenMediaLibrary();
     showView('feed');
   } else {
     state.user = null;

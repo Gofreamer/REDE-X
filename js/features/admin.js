@@ -1,6 +1,6 @@
 /* Rede Global — Admin com abas */
 
-let adminTab = 'mesa';
+let adminTab = 'vivo';
 
 function renderAdmin() {
   const el = document.getElementById('admin-root');
@@ -11,9 +11,11 @@ function renderAdmin() {
   }
 
   const tabs = [
+    { id: 'vivo', label: 'Ao vivo' },
     { id: 'mesa', label: 'Mesa' },
     { id: 'publicar', label: 'Publicar' },
     { id: 'npcs', label: 'NPCs' },
+    { id: 'midia', label: 'Mídia' },
     { id: 'ia', label: 'IA' },
     { id: 'mod', label: 'Moderação' }
   ];
@@ -27,13 +29,113 @@ function renderAdmin() {
         `).join('')}
       </div>
       <div class="admin-panel-body">
+        ${adminTab === 'vivo' ? renderAdminVivo() : ''}
         ${adminTab === 'mesa' ? renderAdminMesa() : ''}
         ${adminTab === 'publicar' ? renderAdminPublicar() : ''}
         ${adminTab === 'npcs' ? renderAdminNpcs() : ''}
+        ${adminTab === 'midia' ? renderAdminMidia() : ''}
         ${adminTab === 'ia' ? renderAdminIA() : ''}
         ${adminTab === 'mod' ? renderAdminMod() : ''}
       </div>
     </div>`;
+}
+
+function renderAdminVivo() {
+  const session = state.siteSettings?.session || {};
+  const scheduled = state.posts.filter(p => p.publishAt && p.publishAt > Date.now());
+  const unreadDm = state.unreadDms || 0;
+  const unreadN = state.unreadNotifs || 0;
+  const sessionPost = session.postId ? state.posts.find(p => p.id === session.postId) : null;
+  const follows = Object.keys(state.following || {});
+
+  return `
+    <section class="panel vivo-panel">
+      <h3>Painel ao vivo</h3>
+      <div class="vivo-grid">
+        <div class="vivo-card">
+          <span class="vivo-label">Sessão</span>
+          <strong>${escapeHTML(session.label || '—')}</strong>
+          ${sessionPost ? `<p class="hint">@${escapeHTML(sessionPost.handle)} · ${escapeHTML((sessionPost.caption||'').slice(0,40))}</p>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="openPostModal('${sessionPost.id}')">Abrir post</button>` : '<p class="hint">Nenhum post fixado</p>'}
+        </div>
+        <div class="vivo-card">
+          <span class="vivo-label">DMs</span>
+          <strong>${unreadDm} não lida(s)</strong>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="showView('dms')">Abrir mensagens</button>
+        </div>
+        <div class="vivo-card">
+          <span class="vivo-label">Fila</span>
+          <strong>${scheduled.length} agendado(s)</strong>
+          <p class="hint">${scheduled.slice(0,2).map(p => '@'+p.handle).join(', ') || 'Vazia'}</p>
+        </div>
+        <div class="vivo-card">
+          <span class="vivo-label">Player segue</span>
+          <strong>${follows.length} contas</strong>
+          <p class="hint">${follows.slice(0,5).map(h => '@'+h).join(' ') || 'Ninguém ainda'}</p>
+        </div>
+      </div>
+      <div class="admin-actions" style="margin-top:14px">
+        <button type="button" class="btn btn-primary" onclick="seedCityFeed()">Popular fio</button>
+        <button type="button" class="btn btn-ghost" onclick="openSessionModal()">Modo sessão</button>
+        <button type="button" class="btn btn-ghost" onclick="showView('feed')">Ver fio</button>
+      </div>
+    </section>`;
+}
+
+function renderAdminMidia() {
+  return `
+    <section class="panel">
+      <h3>Biblioteca de mídia</h3>
+      <p class="hint">Salve URLs pra reutilizar em posts/stories sem caçar de novo.</p>
+      <form onsubmit="adminAddMedia(event)">
+        <div class="form-group">
+          <label>URL</label>
+          <input class="input" id="media-url" type="url" required placeholder="https://…"/>
+        </div>
+        <div class="form-group">
+          <label>Rótulo</label>
+          <input class="input" id="media-label" placeholder="porto noite"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h3>Salvos (${(state.mediaLibrary||[]).length})</h3>
+      <div class="media-grid">
+        ${(state.mediaLibrary||[]).map(m => `
+          <div class="media-item">
+            <img src="${escapeHTML(m.url)}" alt="" onerror="this.style.opacity=0.3"/>
+            <div class="media-item-meta">
+              <span>${escapeHTML(m.label || 'sem rótulo')}</span>
+              <div class="apt-row">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="useMediaInPublish('${escapeHTML(m.url)}')">Usar</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${escapeHTML(m.url)}');showToast('URL copiada')">Copiar</button>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deleteMediaItem('${m.id}')">✕</button>
+              </div>
+            </div>
+          </div>
+        `).join('') || '<p class="text-muted">Biblioteca vazia.</p>'}
+      </div>
+    </section>`;
+}
+
+async function adminAddMedia(e) {
+  e.preventDefault();
+  await saveMediaUrl(
+    document.getElementById('media-url')?.value,
+    document.getElementById('media-label')?.value
+  );
+  e.target.reset();
+}
+
+function useMediaInPublish(url) {
+  adminTab = 'publicar';
+  renderAdmin();
+  setTimeout(() => {
+    const img = document.getElementById('adm-image');
+    if (img) img.value = url;
+    showToast('Imagem no form de publicar.');
+  }, 40);
 }
 
 function renderAdminMesa() {
@@ -204,6 +306,7 @@ function renderAdminNpcs() {
             <button class="btn btn-ghost btn-sm" onclick="openProfile('${escapeHTML(n.handle)}')">Ver</button>
             <button class="btn btn-ghost btn-sm" onclick="quickFillNpc('${escapeHTML(n.handle)}')">Postar</button>
             <button class="btn btn-ghost btn-sm" onclick="startDmWithHandle('${escapeHTML(n.handle)}')">DM</button>
+            <button class="btn btn-ghost btn-sm text-danger" onclick="adminDeleteNpc('${escapeHTML(n.handle)}')">Apagar</button>
           </div>
         `).join('') || '<p class="text-muted">Nenhum NPC.</p>'}
       </div>

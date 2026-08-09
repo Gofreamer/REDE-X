@@ -26,12 +26,34 @@ function showToast(msg, type = 'ok') {
 function timeAgo(ts) {
   if (!ts) return '';
   const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return 'agora';
-  if (s < 3600) return Math.floor(s / 60) + ' min';
-  if (s < 86400) return Math.floor(s / 3600) + ' h';
-  if (s < 604800) return Math.floor(s / 86400) + ' d';
+  if (s < 5) return 'agora';
+  if (s < 60) return s + ' s';
+  if (s < 3600) {
+    const m = Math.floor(s / 60);
+    return 'há ' + m + ' min';
+  }
+  if (s < 86400) {
+    const h = Math.floor(s / 3600);
+    return 'há ' + h + ' h';
+  }
+  if (s < 604800) {
+    const d = Math.floor(s / 86400);
+    return 'há ' + d + ' d';
+  }
   return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
+
+let _timeTicker = null;
+function startTimeTicker() {
+  if (_timeTicker) return;
+  _timeTicker = setInterval(() => {
+    document.querySelectorAll('[data-ts]').forEach(el => {
+      const ts = Number(el.getAttribute('data-ts'));
+      if (ts) el.textContent = timeAgo(ts);
+    });
+  }, 30000);
+}
+startTimeTicker();
 
 function isUserAdmin() {
   if (state.user && ADMIN_UIDS.includes(state.user.uid)) return true;
@@ -50,9 +72,10 @@ function displayHandle(h) {
 
 function linkify(text) {
   return escapeHTML(text || '')
-    .replace(/@([a-z0-9_]{2,24})/gi, '<span class="tag">@$1</span>')
-    .replace(/#([a-z0-9_]{2,32})/gi, '<span class="tag">#$1</span>')
-    .replace(/\n/g, '<br>');
+    .replace(/@([a-z0-9_]{2,24})/gi, '<button type="button" class="tag mention-link" onclick="event.stopPropagation();openProfile(\'$1\')">@$1</button>')
+    .replace(/#([a-z0-9_]{2,32})/gi, '<button type="button" class="tag hashtag-link" onclick="event.stopPropagation();filterByTag(\'$1\')">#$1</button>')
+    .replace(/
+/g, '<br>');
 }
 
 function avatarHTML(p, sizeClass = '') {
