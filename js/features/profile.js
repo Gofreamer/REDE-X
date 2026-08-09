@@ -36,6 +36,17 @@ function renderProfile() {
             <div class="ig-stat"><strong>${formatCount(bundle.followers)}</strong><span>seguidores</span></div>
             <div class="ig-stat"><strong>${formatCount(bundle.following)}</strong><span>seguindo</span></div>
           </div>
+          ${isUserAdmin() ? `
+            <div class="admin-post-tools" style="margin-top:12px">
+              <div class="apt-title">Mesa · este perfil</div>
+              <div class="apt-row">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="openEditProfile()">Editar stats</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminBoostProfile('${escapeHTML(bundle.handle)}')">Boost seguidores</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">DM</button>
+                ${bundle.kind === 'npc' ? `<button type="button" class="btn btn-ghost btn-sm" onclick="quickFillNpc('${escapeHTML(bundle.handle)}')">Postar como</button>` : ''}
+              </div>
+            </div>
+          ` : ''}
           <div class="ig-profile-bio-block desktop-only">
             <div class="ig-display-name">${escapeHTML(bundle.name)}</div>
             ${bundle.bio ? `<div class="ig-bio">${linkify(bundle.bio)}</div>` : ''}
@@ -231,4 +242,42 @@ function openHighlight(handle, hid) {
       <img src="${escapeHTML(it.image)}" alt=""/>
     </div>`;
   modal.classList.add('open');
+}
+
+
+async function adminBoostProfile(handle) {
+  if (!isUserAdmin()) return;
+  const data = await rgForm({
+    title: 'Boost · @' + handle,
+    confirmLabel: 'Aplicar',
+    fields: [
+      { name: 'followers', label: 'Seguidores', type: 'number', value: String(getProfileBundle(handle).followers || 0) },
+      { name: 'following', label: 'Seguindo', type: 'number', value: String(getProfileBundle(handle).following || 0) },
+      { name: 'add', label: 'Ou somar seguidores (+)', type: 'number', value: '50', placeholder: '50' }
+    ]
+  });
+  if (!data) return;
+  let followers = parseInt(data.followers, 10);
+  const add = parseInt(data.add, 10);
+  if (!isNaN(add) && add !== 0) followers = (isNaN(followers) ? 0 : followers) + add;
+  const following = parseInt(data.following, 10);
+  const h = normalizeHandle(handle);
+  const bundle = getProfileBundle(h);
+  try {
+    if (bundle.kind === 'user' && bundle.uid) {
+      await db.ref('users/' + bundle.uid).update({
+        followersCount: Math.max(0, followers || 0),
+        followingCount: Math.max(0, isNaN(following) ? 0 : following)
+      });
+    } else {
+      await db.ref('npcProfiles/' + h).update({
+        followersCount: Math.max(0, followers || 0),
+        followingCount: Math.max(0, isNaN(following) ? 0 : following)
+      });
+    }
+    showToast('Perfil atualizado.');
+    renderProfile();
+  } catch (e) {
+    showToast('Erro no boost.', 'err');
+  }
 }

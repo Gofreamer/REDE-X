@@ -179,9 +179,33 @@ function renderPostModal(id) {
             <span class="ig-likes">${p.likeCount || 0} curtidas</span>
           </div>
           ${isUserAdmin() ? `
-            <div class="admin-comment-as">
-              <input type="text" id="comment-as-handle" class="input input-sm" placeholder="comentar como @npc (vazio = você)"/>
-              <button type="button" class="btn btn-ghost btn-sm" onclick="aiReplyComment('${p.id}')">IA reply</button>
+            <div class="admin-post-tools" id="admin-post-tools">
+              <div class="apt-title">Controles da mesa</div>
+              <div class="apt-row">
+                <label>Likes</label>
+                <input type="number" id="adm-like-count" class="input input-sm" min="0" value="${p.likeCount || 0}" style="width:90px"/>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminSetLikes('${p.id}')">Aplicar</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateLikes('${p.id}')">+ auto</button>
+              </div>
+              <div class="apt-row">
+                <label>Coments</label>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 3)">+3 auto</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="aiReplyComment('${p.id}')">IA reply</button>
+              </div>
+              <div class="apt-row">
+                <select id="comment-as-handle" class="input input-sm">
+                  <option value="">comentar como eu</option>
+                  ${Object.keys(state.npcProfiles || {}).map(h =>
+                    `<option value="${escapeHTML(h)}">@${escapeHTML(h)}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <div class="apt-row">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}')">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="setSessionMode({ postId: '${p.id}', label: 'Sessão' })">Sessão</button>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deletePost('${p.id}')">Apagar</button>
+              </div>
             </div>
           ` : ''}
           <form class="comment-form" onsubmit="submitComment(event, '${p.id}')">
@@ -268,4 +292,115 @@ function renderRightRail() {
       <span class="rail-tag">no ar</span>
     </button>
   `).join('');
+}
+
+
+/* —— Admin engagement tools —— */
+async function adminSetLikes(postId) {
+  if (!isUserAdmin()) return;
+  const n = Math.max(0, parseInt(document.getElementById('adm-like-count')?.value, 10) || 0);
+  try {
+    // rebuild likes map with fake keys to match count (keep real user likes)
+    const post = state.posts.find(p => p.id === postId);
+    const real = {};
+    if (post?.likes) {
+      Object.entries(post.likes).forEach(([uid, v]) => {
+        if (!String(uid).startsWith('bot_')) real[uid] = v;
+      });
+    }
+    const realCount = Object.keys(real).length;
+    const botsNeeded = Math.max(0, n - realCount);
+    const likes = { ...real };
+    for (let i = 0; i < botsNeeded; i++) {
+      likes['bot_' + i + '_' + postId.slice(0, 6)] = Date.now() - i * 1000;
+    }
+    await db.ref('posts/' + postId + '/likes').set(likes);
+    await db.ref('posts/' + postId + '/likeCount').set(n);
+    showToast(n + ' curtidas.');
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao definir likes.', 'err');
+  }
+}
+
+async function adminGenerateLikes(postId) {
+  if (!isUserAdmin()) return;
+  const post = state.posts.find(p => p.id === postId);
+  const current = Number(post?.likeCount) || 0;
+  // bump +5 a +40 de forma "orgânica"
+  const add = 5 + Math.floor(Math.random() * 36);
+  const target = current + add;
+  const input = document.getElementById('adm-like-count');
+  if (input) input.value = target;
+  await adminSetLikes(postId);
+  showToast('+' + add + ' likes gerados.');
+}
+
+const COMMENT_POOL = [
+  'isso aí',
+  'alguém mais viu?',
+  'cidade não para',
+  'preciso disso',
+  'marcando presença',
+  'lenda',
+  'foi ontem?',
+  'núcleo em silêncio de novo',
+  'print salvo',
+  'quem tava no porto confirma',
+  'estética perfeita',
+  'medo e respeito',
+  'manda o local',
+  'isso não é oficial né',
+  'a noite vai ser longa',
+  'já sabia',
+  'finalmente',
+  'top demais',
+  'conta mais',
+  '👀'
+];
+
+function pickCommentText(caption) {
+  const pool = [...COMMENT_POOL];
+  if (caption && /#\w+/.test(caption)) {
+    const tags = caption.match(/#\w+/g) || [];
+    tags.forEach(t => pool.push(t + ' sempre'));
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+async function adminGenerateComments(postId, count = 3) {
+  if (!isUserAdmin()) return;
+  const post = state.posts.find(p => p.id === postId);
+  if (!post) return;
+  const npcs = Object.entries(state.npcProfiles || {});
+  const handles = npcs.length
+    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h }))
+    : [
+        { handle: 'porto_wire', name: 'Porto Wire' },
+        { handle: 'nexo_pulse', name: 'Nexo Pulse' },
+        { handle: 'dock_cam', name: 'Dock Cam' },
+        { handle: 'subsolo_echo', name: 'Subsolo Echo' }
+      ];
+
+  try {
+    for (let i = 0; i < count; i++) {
+      const who = handles[Math.floor(Math.random() * handles.length)];
+      const text = pickCommentText(post.caption);
+      await db.ref('posts/' + postId + '/comments').push({
+        text,
+        uid: 'npc_' + who.handle,
+        handle: who.handle,
+        name: who.name,
+        createdAt: Date.now() - Math.floor(Math.random() * 3600000),
+        bot: true
+      });
+    }
+    const snap = await db.ref('posts/' + postId + '/comments').once('value');
+    const n = snap.exists() ? Object.keys(snap.val()).length : 0;
+    await db.ref('posts/' + postId + '/commentCount').set(n);
+    showToast(count + ' comentário(s) gerado(s).');
+  } catch (e) {
+    console.error(e);
+    showToast('Erro nos comentários.', 'err');
+  }
 }

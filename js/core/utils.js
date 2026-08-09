@@ -71,9 +71,8 @@ function rgConfirm({ title = 'Confirmar', body = '', confirmLabel = 'OK', danger
   document.getElementById('rg-confirm-body').innerHTML = body || '';
   const ok = document.getElementById('rg-confirm-ok');
   ok.textContent = confirmLabel;
-  ok.className = 'btn ' + (danger ? 'btn-primary' : 'btn-primary');
-  if (danger) ok.style.background = '#ed4956';
-  else ok.style.background = '';
+  ok.className = 'ig-dialog-btn ig-dialog-btn-primary' + (danger ? ' ig-dialog-btn-danger' : '');
+  ok.style.background = '';
   m.classList.add('open');
   return new Promise(r => { _confirmResolve = r; });
 }
@@ -81,14 +80,14 @@ function ensureConfirm() {
   if (document.getElementById('rg-confirm')) return;
   const d = document.createElement('div');
   d.id = 'rg-confirm';
-  d.className = 'modal';
+  d.className = 'modal ig-dialog';
   d.innerHTML = `
-    <div class="modal-sheet">
-      <h3 id="rg-confirm-title">Confirmar</h3>
-      <p id="rg-confirm-body" class="modal-body"></p>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="rg-confirm-cancel">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="rg-confirm-ok">OK</button>
+    <div class="ig-dialog-card">
+      <div class="ig-dialog-title" id="rg-confirm-title">Confirmar</div>
+      <div class="ig-dialog-body" id="rg-confirm-body"></div>
+      <div class="ig-dialog-actions">
+        <button type="button" class="ig-dialog-btn" id="rg-confirm-cancel">Cancelar</button>
+        <button type="button" class="ig-dialog-btn ig-dialog-btn-primary" id="rg-confirm-ok">OK</button>
       </div>
     </div>`;
   document.body.appendChild(d);
@@ -118,19 +117,20 @@ function rgForm({ title = 'Formulário', fields = [], confirmLabel = 'OK', cance
       const opts = (f.options || []).map(o =>
         `<option value="${escapeHTML(o.value)}" ${String(o.value) === String(f.value || '') ? 'selected' : ''}>${escapeHTML(o.label)}</option>`
       ).join('');
-      return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
-        <select id="${id}" class="input" ${f.required ? 'required' : ''}>${opts}</select></label>`;
+      return `<label class="ig-field"><span>${escapeHTML(f.label || f.name)}</span>
+        <select id="${id}" class="ig-select" ${f.required ? 'required' : ''}>${opts}</select></label>`;
     }
     if (f.type === 'textarea') {
-      return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
-        <textarea id="${id}" class="input" rows="${f.rows || 3}" placeholder="${escapeHTML(f.placeholder || '')}" ${f.required ? 'required' : ''}>${escapeHTML(f.value || '')}</textarea></label>`;
+      return `<label class="ig-field"><span>${escapeHTML(f.label || f.name)}</span>
+        <textarea id="${id}" class="ig-input" rows="${f.rows || 3}" placeholder="${escapeHTML(f.placeholder || '')}" ${f.required ? 'required' : ''}>${escapeHTML(f.value || '')}</textarea></label>`;
     }
-    return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
-      <input id="${id}" class="input" type="${f.type || 'text'}" value="${escapeHTML(f.value || '')}"
+    return `<label class="ig-field"><span>${escapeHTML(f.label || f.name)}</span>
+      <input id="${id}" class="ig-input" type="${f.type || 'text'}" value="${escapeHTML(f.value || '')}"
         placeholder="${escapeHTML(f.placeholder || '')}" ${f.required ? 'required' : ''}/></label>`;
   }).join('');
   document.getElementById('rg-form-ok').textContent = confirmLabel;
-  document.getElementById('rg-form-cancel').textContent = cancelLabel;
+  const cancelBtn = document.getElementById('rg-form-cancel');
+  if (cancelBtn) cancelBtn.textContent = cancelLabel;
   m.classList.add('open');
   const first = body.querySelector('input, textarea, select');
   if (first) setTimeout(() => first.focus(), 50);
@@ -141,17 +141,17 @@ function ensureFormModal() {
   if (document.getElementById('rg-form-modal')) return;
   const d = document.createElement('div');
   d.id = 'rg-form-modal';
-  d.className = 'modal';
+  d.className = 'modal ig-dialog';
   d.innerHTML = `
-    <div class="modal-sheet" style="max-width:420px">
-      <div class="sheet-head">
-        <h3 id="rg-form-title">Formulário</h3>
-        <button type="button" class="icon-btn" id="rg-form-x">✕</button>
+    <div class="ig-dialog-card ig-dialog-form">
+      <div class="ig-dialog-head">
+        <button type="button" class="ig-dialog-x" id="rg-form-x">✕</button>
+        <div class="ig-dialog-title" id="rg-form-title">Formulário</div>
+        <button type="button" class="ig-dialog-done" id="rg-form-ok">OK</button>
       </div>
-      <div id="rg-form-fields"></div>
-      <div class="modal-actions" style="margin-top:14px">
-        <button type="button" class="btn btn-ghost" id="rg-form-cancel">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="rg-form-ok">OK</button>
+      <div class="ig-dialog-fields" id="rg-form-fields"></div>
+      <div class="ig-dialog-actions ig-dialog-actions-bottom">
+        <button type="button" class="ig-dialog-btn" id="rg-form-cancel">Cancelar</button>
       </div>
     </div>`;
   document.body.appendChild(d);
