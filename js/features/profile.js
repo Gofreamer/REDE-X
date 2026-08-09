@@ -203,11 +203,16 @@ function renderHighlightsStrip(handle, isMe) {
 }
 
 async function promptAddHighlight(handle) {
-  const title = prompt('Titulo do destaque (ex: Tour):', 'Destaque');
-  if (title === null) return;
-  const image = prompt('URL da imagem:');
-  if (!image) return;
-  await addHighlight(handle, { title, image });
+  const data = await rgForm({
+    title: 'Novo destaque',
+    confirmLabel: 'Adicionar',
+    fields: [
+      { name: 'title', label: 'Título', value: 'Destaque', required: true, placeholder: 'Tour' },
+      { name: 'image', label: 'URL da imagem', type: 'url', required: true, placeholder: 'https://…' }
+    ]
+  });
+  if (!data) return;
+  await addHighlight(handle, { title: data.title, image: data.image });
   renderProfile();
 }
 

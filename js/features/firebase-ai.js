@@ -66,8 +66,11 @@ function normalizeHandleLocal(h) {
 
 async function generatePostWithAI() {
   const idea = document.getElementById("ai-idea")?.value.trim();
-  const handle = document.getElementById("ai-handle")?.value.trim() || "porto_wire";
-  const name = document.getElementById("ai-name")?.value.trim() || handle;
+  const handle = (document.getElementById("ai-handle")?.value || "").trim() || "porto_wire";
+  const npc = (typeof state !== "undefined" && state.npcProfiles)
+    ? state.npcProfiles[handle] || state.npcProfiles[(handle || "").toLowerCase()]
+    : null;
+  const name = document.getElementById("ai-name")?.value.trim() || npc?.name || handle;
   const status = document.getElementById("ai-status");
   const btn = document.getElementById("btn-ai-gen");
 

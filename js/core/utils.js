@@ -71,7 +71,9 @@ function rgConfirm({ title = 'Confirmar', body = '', confirmLabel = 'OK', danger
   document.getElementById('rg-confirm-body').innerHTML = body || '';
   const ok = document.getElementById('rg-confirm-ok');
   ok.textContent = confirmLabel;
-  ok.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+  ok.className = 'btn ' + (danger ? 'btn-primary' : 'btn-primary');
+  if (danger) ok.style.background = '#ed4956';
+  else ok.style.background = '';
   m.classList.add('open');
   return new Promise(r => { _confirmResolve = r; });
 }
@@ -98,3 +100,81 @@ function ensureConfirm() {
   document.getElementById('rg-confirm-cancel').onclick = () => close(false);
   document.getElementById('rg-confirm-ok').onclick = () => close(true);
 }
+
+
+let _formResolve = null;
+/**
+ * Modal de formulário (substitui prompt nativo)
+ * fields: [{ name, label, type, value, placeholder, required, options:[{value,label}] }]
+ */
+function rgForm({ title = 'Formulário', fields = [], confirmLabel = 'OK', cancelLabel = 'Cancelar' } = {}) {
+  ensureFormModal();
+  const m = document.getElementById('rg-form-modal');
+  document.getElementById('rg-form-title').textContent = title;
+  const body = document.getElementById('rg-form-fields');
+  body.innerHTML = fields.map((f, i) => {
+    const id = 'rgf-' + f.name;
+    if (f.type === 'select') {
+      const opts = (f.options || []).map(o =>
+        `<option value="${escapeHTML(o.value)}" ${String(o.value) === String(f.value || '') ? 'selected' : ''}>${escapeHTML(o.label)}</option>`
+      ).join('');
+      return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
+        <select id="${id}" class="input" ${f.required ? 'required' : ''}>${opts}</select></label>`;
+    }
+    if (f.type === 'textarea') {
+      return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
+        <textarea id="${id}" class="input" rows="${f.rows || 3}" placeholder="${escapeHTML(f.placeholder || '')}" ${f.required ? 'required' : ''}>${escapeHTML(f.value || '')}</textarea></label>`;
+    }
+    return `<label class="field"><span>${escapeHTML(f.label || f.name)}</span>
+      <input id="${id}" class="input" type="${f.type || 'text'}" value="${escapeHTML(f.value || '')}"
+        placeholder="${escapeHTML(f.placeholder || '')}" ${f.required ? 'required' : ''}/></label>`;
+  }).join('');
+  document.getElementById('rg-form-ok').textContent = confirmLabel;
+  document.getElementById('rg-form-cancel').textContent = cancelLabel;
+  m.classList.add('open');
+  const first = body.querySelector('input, textarea, select');
+  if (first) setTimeout(() => first.focus(), 50);
+  return new Promise(resolve => { _formResolve = resolve; });
+}
+
+function ensureFormModal() {
+  if (document.getElementById('rg-form-modal')) return;
+  const d = document.createElement('div');
+  d.id = 'rg-form-modal';
+  d.className = 'modal';
+  d.innerHTML = `
+    <div class="modal-sheet" style="max-width:420px">
+      <div class="sheet-head">
+        <h3 id="rg-form-title">Formulário</h3>
+        <button type="button" class="icon-btn" id="rg-form-x">✕</button>
+      </div>
+      <div id="rg-form-fields"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button type="button" class="btn btn-ghost" id="rg-form-cancel">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="rg-form-ok">OK</button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+  const close = (val) => {
+    d.classList.remove('open');
+    const r = _formResolve; _formResolve = null; if (r) r(val);
+  };
+  d.addEventListener('click', e => { if (e.target === d) close(null); });
+  document.getElementById('rg-form-cancel').onclick = () => close(null);
+  document.getElementById('rg-form-x').onclick = () => close(null);
+  document.getElementById('rg-form-ok').onclick = () => {
+    const fields = [...document.querySelectorAll('#rg-form-fields [id^="rgf-"]')];
+    const data = {};
+    for (const el of fields) {
+      const name = el.id.replace(/^rgf-/, '');
+      if (el.required && !String(el.value || '').trim()) {
+        el.focus();
+        return;
+      }
+      data[name] = el.value;
+    }
+    close(data);
+  };
+}
+
+// fix danger button style on confirm
