@@ -169,7 +169,7 @@ function renderPostCard(p) {
       </div>
 
       <div class="ig-meta">
-        <div class="ig-likes">${p.likeCount || 0} curtida${(p.likeCount || 0) === 1 ? '' : 's'}</div>
+        <div class="ig-likes">${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)} curtida${(p.likeCount || 0) === 1 ? '' : 's'}</div>
         ${p.caption ? `<div class="ig-caption"><strong>${escapeHTML(p.handle)}</strong> ${linkify(p.caption)}</div>` : ''}
         ${(p.commentCount || 0) > 0
           ? `<button class="ig-view-comments" onclick="openPostModal('${p.id}')">Ver ${p.commentCount} comentário${p.commentCount > 1 ? 's' : ''}</button>`
@@ -313,14 +313,14 @@ function renderPostModal(id) {
             <button class="icon-btn" onclick="document.getElementById('comment-input')?.focus()" title="Comentar">💬</button>
             <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link">↗</button>
             <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}">${saved ? '★' : '☆'}</button>
-            <span class="ig-likes">${p.likeCount || 0} curtidas</span>
+            <span class="ig-likes">${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)} curtidas</span>
           </div>
           ${isUserAdmin() ? `
             <div class="admin-post-tools" id="admin-post-tools">
               <div class="apt-title">Controles da mesa</div>
               <div class="apt-row">
                 <label>Likes</label>
-                <input type="number" id="adm-like-count" class="input input-sm" min="0" value="${p.likeCount || 0}" style="width:90px"/>
+                <input type="number" id="adm-like-count" class="input input-sm" min="0" step="1" value="${p.likeCount || 0}" style="width:120px"/>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminSetLikes('${p.id}')">Aplicar</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateLikes('${p.id}')">+ auto</button>
               </div>
@@ -516,9 +516,11 @@ function renderRightRail() {
 /* —— Admin engagement tools —— */
 async function adminSetLikes(postId) {
   if (!isUserAdmin()) return;
-  const n = Math.max(0, parseInt(document.getElementById('adm-like-count')?.value, 10) || 0);
+  const raw = document.getElementById('adm-like-count')?.value;
+  const n = Math.max(0, parseInt(String(raw || '').replace(/\D/g, ''), 10) || 0);
   try {
-    // rebuild likes map with fake keys to match count (keep real user likes)
+    // likes map só precisa dos players reais (pra saber se o user curtiu).
+    // likeCount é a fonte da verdade pro número exibido — sem criar dezenas de milhares de bot keys.
     const post = state.posts.find(p => p.id === postId);
     const real = {};
     if (post?.likes) {
@@ -526,15 +528,10 @@ async function adminSetLikes(postId) {
         if (!String(uid).startsWith('bot_')) real[uid] = v;
       });
     }
-    const realCount = Object.keys(real).length;
-    const botsNeeded = Math.max(0, n - realCount);
-    const likes = { ...real };
-    for (let i = 0; i < botsNeeded; i++) {
-      likes['bot_' + i + '_' + postId.slice(0, 6)] = Date.now() - i * 1000;
-    }
-    await db.ref('posts/' + postId + '/likes').set(likes);
+    // limpa bots antigos se existirem (evita payload gigante no RTDB)
+    await db.ref('posts/' + postId + '/likes').set(real);
     await db.ref('posts/' + postId + '/likeCount').set(n);
-    showToast(n + ' curtidas.');
+    showToast((typeof formatCount === 'function' ? formatCount(n) : n) + ' curtidas.');
   } catch (e) {
     console.error(e);
     showToast('Erro ao definir likes.', 'err');
@@ -592,23 +589,25 @@ async function adminGenerateComments(postId, count = 3) {
   if (!post) return;
   const npcs = Object.entries(state.npcProfiles || {});
   const handles = npcs.length
-    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h }))
+    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h, avatar: u.avatar || '' }))
     : [
-        { handle: 'porto_wire', name: 'Porto Wire' },
-        { handle: 'nexo_pulse', name: 'Nexo Pulse' },
-        { handle: 'dock_cam', name: 'Dock Cam' },
-        { handle: 'subsolo_echo', name: 'Subsolo Echo' }
+        { handle: 'porto_wire', name: 'Porto Wire', avatar: '' },
+        { handle: 'nexo_pulse', name: 'Nexo Pulse', avatar: '' },
+        { handle: 'dock_cam', name: 'Dock Cam', avatar: '' },
+        { handle: 'subsolo_echo', name: 'Subsolo Echo', avatar: '' }
       ];
 
   try {
     for (let i = 0; i < count; i++) {
       const who = handles[Math.floor(Math.random() * handles.length)];
       const text = pickCommentText(post.caption);
+      const av = who.avatar || (typeof resolveAvatar === 'function' ? resolveAvatar(who.handle) : '');
       await db.ref('posts/' + postId + '/comments').push({
         text,
         uid: 'npc_' + who.handle,
         handle: who.handle,
         name: who.name,
+        avatar: av,
         createdAt: Date.now() - Math.floor(Math.random() * 3600000),
         bot: true
       });
@@ -668,16 +667,16 @@ async function adminPreviewComments(postId, count = 3) {
   if (!post) return;
   const npcs = Object.entries(state.npcProfiles || {});
   const handles = npcs.length
-    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h }))
+    ? npcs.map(([h, u]) => ({ handle: h, name: u.name || h, avatar: u.avatar || '' }))
     : [
-        { handle: 'porto_wire', name: 'Porto Wire' },
-        { handle: 'nexo_pulse', name: 'Nexo Pulse' },
-        { handle: 'dock_cam', name: 'Dock Cam' }
+        { handle: 'porto_wire', name: 'Porto Wire', avatar: '' },
+        { handle: 'nexo_pulse', name: 'Nexo Pulse', avatar: '' },
+        { handle: 'dock_cam', name: 'Dock Cam', avatar: '' }
       ];
   const draft = [];
   for (let i = 0; i < count; i++) {
     const who = handles[Math.floor(Math.random() * handles.length)];
-    draft.push({ handle: who.handle, name: who.name, text: pickCommentText(post.caption) });
+    draft.push({ handle: who.handle, name: who.name, avatar: who.avatar, text: pickCommentText(post.caption) });
   }
   const body = draft.map((d, i) =>
     `<div style="text-align:left;margin:8px 0;padding:8px;background:#121212;border-radius:8px">
@@ -692,11 +691,13 @@ async function adminPreviewComments(postId, count = 3) {
   if (!ok) return;
   try {
     for (const d of draft) {
+      const av = d.avatar || (typeof resolveAvatar === 'function' ? resolveAvatar(d.handle) : '');
       await db.ref('posts/' + postId + '/comments').push({
         text: d.text,
         uid: 'npc_' + d.handle,
         handle: d.handle,
         name: d.name,
+        avatar: av,
         createdAt: Date.now() - Math.floor(Math.random() * 3600000),
         bot: true
       });

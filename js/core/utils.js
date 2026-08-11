@@ -77,10 +77,34 @@ function linkify(text) {
     .replace(/\n/g, '<br>');
 }
 
+function resolveAvatar(handle, fallback = '') {
+  if (fallback) return fallback;
+  const h = typeof normalizeHandle === 'function' ? normalizeHandle(handle) : String(handle || '').replace(/^@/, '').toLowerCase();
+  if (!h) return '';
+  try {
+    if (typeof state !== 'undefined') {
+      const npc = state.npcProfiles?.[h] || state.npcProfiles?.[h.toLowerCase()];
+      if (npc?.avatar) return npc.avatar;
+      const profiles = state.profiles || {};
+      for (const uid of Object.keys(profiles)) {
+        const u = profiles[uid];
+        if (u && (typeof normalizeHandle === 'function' ? normalizeHandle(u.handle) : String(u.handle || '').replace(/^@/, '').toLowerCase()) === h && u.avatar) {
+          return u.avatar;
+        }
+      }
+      if (state.profile && (typeof normalizeHandle === 'function' ? normalizeHandle(state.profile.handle) : String(state.profile.handle || '').replace(/^@/, '').toLowerCase()) === h) {
+        return state.profile.avatar || '';
+      }
+    }
+  } catch (_) {}
+  return '';
+}
+
 function avatarHTML(p, sizeClass = '') {
   const letter = ((p?.name || p?.handle || '?')[0] || '?').toUpperCase();
-  if (p?.avatar) {
-    return `<div class="avatar ${sizeClass}"><img src="${escapeHTML(p.avatar)}" alt="" onerror="this.parentElement.innerHTML='<span>${letter}</span>'"/></div>`;
+  const src = p?.avatar || resolveAvatar(p?.handle, '');
+  if (src) {
+    return `<div class="avatar ${sizeClass}"><img src="${escapeHTML(src)}" alt="" onerror="this.parentElement.innerHTML='<span>${letter}</span>'"/></div>`;
   }
   return `<div class="avatar ${sizeClass}"><span>${letter}</span></div>`;
 }

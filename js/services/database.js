@@ -190,12 +190,14 @@ async function addComment(postId, text, asNpc, replyTo = null) {
   let handle = normalizeHandle(state.profile.handle);
   let name = state.profile.name || handle;
   let uid = state.user.uid;
+  let avatar = state.profile.avatar || '';
 
   if (asNpc && isUserAdmin()) {
     handle = normalizeHandle(asNpc.handle || asNpc);
     const npc = state.npcProfiles?.[handle];
     name = asNpc.name || npc?.name || handle;
     uid = 'npc_' + handle;
+    avatar = npc?.avatar || '';
   }
 
   if (!handle) {
@@ -213,6 +215,7 @@ async function addComment(postId, text, asNpc, replyTo = null) {
   const c = {
     text: body,
     uid, handle, name,
+    avatar: avatar || (typeof resolveAvatar === 'function' ? resolveAvatar(handle) : ''),
     createdAt: Date.now()
   };
   if (parentId) {

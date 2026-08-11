@@ -671,11 +671,15 @@ async function publishAiComments() {
     for (const d of selected) {
       const h = normalizeHandleLocal(d.handle);
       const text = d.text.trim().slice(0, 240);
+      const av = (typeof state !== 'undefined' && state.npcProfiles?.[h]?.avatar)
+        || (typeof resolveAvatar === 'function' ? resolveAvatar(h) : '')
+        || '';
       await db.ref('posts/' + postId + '/comments').push({
         text,
         uid: 'npc_' + h,
         handle: h,
         name: d.name || d.handle,
+        avatar: av,
         createdAt: Date.now() - Math.floor(Math.random() * 20 * 60000),
         bot: true,
         ai: true

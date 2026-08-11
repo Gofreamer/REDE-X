@@ -48,7 +48,7 @@ function renderPostCard(p) {
         ${img}
         <div class="post-actions">
           <button class="post-action ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')" title="Curtir">
-            ${liked ? '♥' : '♡'} <span>${p.likeCount || 0}</span>
+            ${liked ? '♥' : '♡'} <span>${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)}</span>
           </button>
           <button class="post-action" onclick="setReplyTo('${p.id}')" title="Responder">
             ↩ <span>${replies.length || ''}</span>
