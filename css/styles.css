@@ -563,17 +563,20 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 .compose-preview img { width: 100%; height: 100%; object-fit: cover; }
 
 .post-sheet {
-  max-width: 900px;
+  max-width: 960px;
+  width: min(960px, 96vw);
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  max-height: min(92vh, 900px);
 }
 .modal-post {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: 1.2fr 0.9fr;
   min-height: 0;
-  max-height: 90vh;
+  height: min(92vh, 900px);
+  max-height: min(92vh, 900px);
   flex: 1;
 }
 .modal-post-media {
@@ -586,7 +589,8 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 }
 .modal-post-media img {
   width: 100%;
-  max-height: 90vh;
+  height: 100%;
+  max-height: min(92vh, 900px);
   object-fit: contain;
 }
 .modal-post-side {
@@ -595,17 +599,27 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
   border-left: 1px solid var(--line);
   background: var(--bg);
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
+  height: 100%;
+}
+.modal-post-side .ig-head {
+  flex-shrink: 0;
 }
 .modal-comments {
   flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 12px 14px;
-  min-height: 0;
+  min-height: 80px;
   -webkit-overflow-scrolling: touch;
 }
-.comment-row { font-size: 0.88rem; margin-bottom: 12px; }
+.comment-row {
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .comment-row strong { margin-right: 6px; }
 .c-time { display: block; font-size: 0.7rem; color: var(--faint); margin-top: 2px; }
 .modal-footer {
@@ -613,9 +627,18 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
   padding: 10px 12px;
   flex-shrink: 0;
   background: var(--bg);
+  max-height: 42%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .comment-form { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
 .comment-form .input { flex: 1; min-width: 0; }
+.admin-post-tools {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
 
 .story-layer { background: #000; padding: 0; }
 .story-full {
@@ -2223,4 +2246,107 @@ body.post-modal-open {
 .aip-fields textarea {
   resize: vertical;
   min-height: 90px;
+}
+
+/* Profile: evita corte de botões e bio no desktop */
+.ig-profile-userline {
+  row-gap: 8px;
+}
+.ig-profile-userline .btn,
+.ig-profile-userline .btn-edit,
+.ig-profile-userline .btn-follow {
+  flex-shrink: 0;
+}
+.ig-profile-bio-block {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ig-profile .admin-post-tools {
+  max-height: none;
+  overflow: visible;
+}
+#view-profile {
+  overflow-x: hidden;
+}
+.profile-grid {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Desktop post modal: garante scroll de comentários */
+@media (min-width: 769px) {
+  #post-modal .post-sheet {
+    height: min(92vh, 900px);
+  }
+  #post-modal .modal-post-side {
+    max-height: min(92vh, 900px);
+  }
+  #post-modal .modal-comments {
+    flex: 1 1 auto;
+    min-height: 120px;
+  }
+  #post-modal .modal-footer {
+    max-height: 38%;
+  }
+}
+
+/* AI comments tone controls */
+.aic-tone-block {
+  padding: 10px 16px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.aic-tone-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.aic-tone-label span {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.aic-tone-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 52px;
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+}
+.aic-tone-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.aic-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aic-chip:hover {
+  color: var(--text);
+  border-color: #555;
+}
+.aic-gen-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.aic-count-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.aic-count {
+  width: 64px;
 }

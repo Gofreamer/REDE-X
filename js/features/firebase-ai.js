@@ -367,7 +367,7 @@ async function aiReplyComment(postId) {
   openAiCommentsReview(postId, 1);
 }
 
-async function openAiCommentsReview(postId, count = 3) {
+async function openAiCommentsReview(postId, count = 3, autoGenerate = true) {
   if (typeof isUserAdmin === 'function' && !isUserAdmin()) {
     if (typeof showToast === 'function') showToast('Só admin.', 'err');
     return;
@@ -384,6 +384,7 @@ async function openAiCommentsReview(postId, count = 3) {
   const list = document.getElementById('ai-comments-list');
   const status = document.getElementById('ai-comments-status');
   const meta = document.getElementById('ai-comments-meta');
+  const countEl = document.getElementById('aic-count');
 
   if (meta) {
     meta.innerHTML = `
@@ -392,15 +393,45 @@ async function openAiCommentsReview(postId, count = 3) {
         <span>${escapeHTMLSafe((post.caption || '').slice(0, 120))}${(post.caption || '').length > 120 ? '…' : ''}</span>
       </div>`;
   }
-  if (list) {
-    list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>Gemini gerando comentários…</p></div>`;
-  }
-  if (status) status.textContent = 'gemini-3.6-flash';
+  if (countEl) countEl.value = String(Math.max(1, Math.min(8, Number(count) || 3)));
+  if (status) status.textContent = 'defina o tom e gere';
   modal.classList.add('open');
 
-  const n = Math.max(1, Math.min(8, Number(count) || 3));
+  if (autoGenerate) {
+    await runAiCommentsGenerate();
+  } else if (list && !(window.__rgAiComments || []).length) {
+    list.innerHTML = `<div class="aic-empty"><p>Escolha o tom e toque em <strong>Gerar</strong>.</p></div>`;
+  }
+}
+
+function getAiCommentsTone() {
+  const el = document.getElementById('aic-tone');
+  return (el?.value || '').trim();
+}
+
+function setAiCommentsTone(tone) {
+  const el = document.getElementById('aic-tone');
+  if (el) el.value = tone;
+}
+
+async function runAiCommentsGenerate() {
+  const postId = window.__rgAiCommentsPostId;
+  const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
+  if (!post) return;
+
+  const list = document.getElementById('ai-comments-list');
+  const status = document.getElementById('ai-comments-status');
+  const countEl = document.getElementById('aic-count');
+  const n = Math.max(1, Math.min(8, parseInt(countEl?.value, 10) || 3));
+  const tone = getAiCommentsTone();
+
+  if (list) {
+    list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>Gemini gerando com o tom escolhido…</p></div>`;
+  }
+  if (status) status.textContent = tone ? ('tom: ' + tone.slice(0, 40)) : 'gemini-3.6-flash';
+
   try {
-    const drafts = await generateAiCommentDrafts(post, n);
+    const drafts = await generateAiCommentDrafts(post, n, tone);
     window.__rgAiComments = drafts;
     renderAiCommentsList();
     if (status) status.textContent = drafts.length + ' rascunho(s) · revise antes de publicar';
@@ -408,33 +439,40 @@ async function openAiCommentsReview(postId, count = 3) {
     console.error(e);
     if (list) {
       list.innerHTML = `<div class="aic-empty"><p>Falha na IA.</p><p class="hint">${escapeHTMLSafe(e?.message || 'erro')}</p>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="openAiCommentsReview('${postId}', ${n})">Tentar de novo</button></div>`;
+        <button type="button" class="btn btn-ghost btn-sm" onclick="runAiCommentsGenerate()">Tentar de novo</button></div>`;
     }
     if (status) status.textContent = 'erro';
     if (typeof showToast === 'function') showToast('Erro na IA de comentários.', 'err');
   }
 }
 
-async function generateAiCommentDrafts(post, count) {
+async function generateAiCommentDrafts(post, count, tone) {
   const pool = getNpcPoolForAI();
   const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.max(count, 3));
   const roster = shuffled.map(x => `@${x.handle} (${x.name})`).join(', ');
+  const toneLine = (tone || '').trim()
+    ? `TOM PEDIDO PELO MESTRE (prioridade máxima): ${tone.trim()}`
+    : `Tom padrão: português BR de cidade, informal, seco, às vezes irônico; evitar "amei/parabéns/incrível".`;
 
-  const prompt = `Você escreve comentários para a Rede Global, rede social in-world de RPG urbano/cyberpunk brasileiro.
-Poste de @${normalizeHandleLocal(post.handle)} (${post.name || post.handle}):
+  const prompt = `Você escreve comentários na Rede Global — rede social da cidade (cyberpunk/urbano brasileiro).
+NÃO é Instagram genérico: é gente da rua, do porto, do setor, de marca underground.
+
+Post de @${normalizeHandleLocal(post.handle)} (${post.name || post.handle}):
 "${(post.caption || '(sem legenda)').slice(0, 400)}"
 
-Gere EXATAMENTE ${count} comentários diferentes de contas da cidade.
-Use APENAS handles desta lista (ou invente handles realistas se precisar): ${roster}
+Gere EXATAMENTE ${count} comentários de contas diferentes.
+Preferir handles desta lista: ${roster}
 
-Regras:
-- Português brasileiro natural, tom de rede social
-- Cada comentário: máximo 140 caracteres
-- Variar tom: elogio, piada, rumor, pergunta, reação curta
-- Nada de meta (não fale de RPG, mestre, IA)
-- NÃO use aspas envolvendo o texto
+${toneLine}
 
-Responda SOMENTE com JSON array válido:
+Regras fixas:
+- Máx 120 caracteres cada
+- Zero meta (sem RPG, mestre, IA, personagem)
+- Sem aspas envolvendo o texto
+- Variar vozes entre os comentários
+- Respeitar o tom pedido acima em TODOS os comentários
+
+JSON only:
 [{"handle":"sem_arroba","name":"Nome","text":"comentário"}]`;
 
   let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
@@ -481,9 +519,25 @@ function ensureAiCommentsModal() {
         <button type="button" class="icon-btn" onclick="closeAiCommentsModal()" title="Fechar">✕</button>
       </div>
       <div id="ai-comments-meta" class="aic-meta"></div>
+      <div class="aic-tone-block">
+        <label class="aic-tone-label">Tom / instrução <span>(a IA segue isso na geração)</span></label>
+        <textarea class="input aic-tone-input" id="aic-tone" rows="2" placeholder="Ex: fãs empolgados da marca · imprensa fria · rumor hostil do subsolo · zoação leve entre amigos…"></textarea>
+        <div class="aic-tone-chips">
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('fãs empolgados, elogio genuíno, energia de streetwear')">Fãs</button>
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('imprensa e colunistas, tom frio e profissional')">Imprensa</button>
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('rumor hostil do subsolo, desconfiança, tom seco')">Rumor hostil</button>
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('zoação leve entre amigos da cidade, ironia sem ofensa pesada')">Zoação</button>
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('hype de lançamento, urgência de quem quer comprar')">Hype</button>
+          <button type="button" class="aic-chip" onclick="setAiCommentsTone('comentários curtos e secos, quase sem emoji')">Seco</button>
+        </div>
+        <div class="aic-gen-row">
+          <label class="aic-count-label">Qtd
+            <input type="number" class="input input-sm aic-count" id="aic-count" min="1" max="8" value="3"/>
+          </label>
+          <button type="button" class="btn btn-primary btn-sm" onclick="runAiCommentsGenerate()">✦ Gerar com este tom</button>
+        </div>
+      </div>
       <div class="aic-toolbar">
-        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsRegenerate(3)">↻ 3 novos</button>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsRegenerate(5)">↻ 5 novos</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsSelectAll(true)">Marcar todos</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsSelectAll(false)">Desmarcar</button>
       </div>
@@ -572,20 +626,26 @@ function aiCommentsSelectAll(on) {
   renderAiCommentsList();
 }
 async function aiCommentsRegenerate(count) {
-  const postId = window.__rgAiCommentsPostId;
-  if (postId) openAiCommentsReview(postId, count);
+  const countEl = document.getElementById('aic-count');
+  if (countEl && count) countEl.value = String(count);
+  await runAiCommentsGenerate();
 }
 async function aiCommentRegenOne(i) {
   const postId = window.__rgAiCommentsPostId;
   const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
   const d = window.__rgAiComments[i];
   if (!post || !d) return;
+  const tone = getAiCommentsTone();
   try {
     if (typeof showToast === 'function') showToast('Regenerando…');
-    const prompt = `Escreva 1 comentário (max 140 chars) como @${d.handle} (${d.name}) no post de @${post.handle}: "${(post.caption || '').slice(0, 300)}".
-Português BR, rede social in-world, sem aspas. Só o texto.`;
-    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
-    d.text = String(text || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240);
+    const toneLine = tone
+      ? `TOM PEDIDO: ${tone}`
+      : 'Tom: cidade cyberpunk BR, informal, seco.';
+    const prompt = `1 comentário (máx 120 chars) como @${d.handle} (${d.name}) no post de @${post.handle}: "${(post.caption || '').slice(0, 300)}".
+${toneLine}
+Sem meta de RPG/IA. Sem aspas. Só o texto.`;
+    let textOut = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    d.text = String(textOut || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240);
     renderAiCommentsList();
   } catch (e) {
     if (typeof showToast === 'function') showToast('Falha ao regenerar.', 'err');
@@ -636,6 +696,9 @@ window.generateBatchCaptions = generateBatchCaptions;
 window.applyBatchItem = applyBatchItem;
 window.aiReplyComment = aiReplyComment;
 window.openAiCommentsReview = openAiCommentsReview;
+window.runAiCommentsGenerate = runAiCommentsGenerate;
+window.setAiCommentsTone = setAiCommentsTone;
+window.getAiCommentsTone = getAiCommentsTone;
 window.closeAiCommentsModal = closeAiCommentsModal;
 window.publishAiComments = publishAiComments;
 window.aiCommentsRegenerate = aiCommentsRegenerate;

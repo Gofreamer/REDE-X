@@ -30,15 +30,25 @@ function listenPosts() {
 function listenProfiles() {
   db.ref('users').on('value', snap => {
     state.profiles = snap.val() || {};
+    // sincroniza em todos os clientes: feed, perfil aberto, modal, rail
     if (state.currentView === 'feed') renderFeed();
+    if (state.currentView === 'profile') renderProfile();
+    if (state.currentView === 'admin') renderAdmin();
+    if (state.currentView === 'search' && typeof renderSearch === 'function') renderSearch();
+    if (state.activePost && typeof renderPostModal === 'function') renderPostModal(state.activePost);
+    if (typeof renderRightRail === 'function') renderRightRail();
+    if (typeof updateChrome === 'function') updateChrome();
   });
 }
 
 function listenNpcProfiles() {
   db.ref('npcProfiles').on('value', snap => {
     state.npcProfiles = snap.val() || {};
+    if (state.currentView === 'feed') renderFeed();
     if (state.currentView === 'profile') renderProfile();
     if (state.currentView === 'admin') renderAdmin();
+    if (state.activePost && typeof renderPostModal === 'function') renderPostModal(state.activePost);
+    if (typeof renderRightRail === 'function') renderRightRail();
   });
 }
 
