@@ -113,6 +113,7 @@ img { max-width: 100%; display: block; }
 .sidebar {
   position: sticky;
   top: 0;
+  align-self: flex-start; /* sem isso o flex estica a sidebar na altura do feed e o sticky não gruda */
   height: 100vh;
   width: var(--sidebar-w);
   flex-shrink: 0;
@@ -122,6 +123,7 @@ img { max-width: 100%; display: block; }
   flex-direction: column;
   background: var(--bg);
   z-index: 20;
+  overflow-y: auto;
 }
 .sidebar-brand {
   display: flex;
@@ -234,6 +236,7 @@ img { max-width: 100%; display: block; }
   padding: 36px 16px 24px 8px;
   position: sticky;
   top: 0;
+  align-self: flex-start;
   height: 100vh;
   overflow: auto;
 }
