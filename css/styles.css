@@ -2350,3 +2350,89 @@ body.post-modal-open {
 .aic-count {
   width: 64px;
 }
+
+/* Instagram-style comments */
+.avatar.xs { width: 28px; height: 28px; font-size: 0.75rem; flex-shrink: 0; }
+.ig-comment {
+  margin-bottom: 14px;
+}
+.ig-comment-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ig-comment-main {
+  flex: 1;
+  min-width: 0;
+}
+.ig-comment-text {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ig-comment-user {
+  margin-right: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ig-comment-user:hover { opacity: 0.85; }
+.ig-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.ig-comment-reply-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--faint);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.ig-comment-reply-btn:hover,
+.ig-comment-reply-btn.active {
+  color: var(--text);
+}
+.ig-comment-thread {
+  margin: 10px 0 0 38px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.ig-comment-reply {
+  margin-bottom: 10px;
+}
+.ig-caption-row {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ig-comments-empty {
+  padding: 12px 0;
+  font-size: 0.88rem;
+}
+.ig-reply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 2px 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+.ig-reply-bar strong { color: var(--text); }
+.ig-reply-cancel {
+  color: var(--faint);
+  font-size: 0.9rem;
+  padding: 2px 6px;
+}
+.comment-post-btn {
+  color: var(--blue) !important;
+  font-weight: 600;
+}
+.comment-form .input:focus {
+  outline: none;
+}

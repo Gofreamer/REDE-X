@@ -168,17 +168,24 @@ async function toggleLike(postId) {
   }
 }
 
-async function addComment(postId, text, asNpc) {
+function resolveUidByHandle(handle) {
+  const h = normalizeHandle(handle);
+  if (!h) return null;
+  const entry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+  return entry ? entry[0] : null;
+}
+
+async function addComment(postId, text, asNpc, replyTo = null) {
   if (!state.user) {
     showToast('Faça login para comentar.', 'err');
-    return;
+    return false;
   }
   if (!state.profile) {
     showToast('Perfil ainda carregando… tente de novo.', 'err');
-    return;
+    return false;
   }
-  const body = (text || '').trim().slice(0, 240);
-  if (!body) return;
+  let body = (text || '').trim().slice(0, 240);
+  if (!body) return false;
 
   let handle = normalizeHandle(state.profile.handle);
   let name = state.profile.name || handle;
@@ -186,13 +193,21 @@ async function addComment(postId, text, asNpc) {
 
   if (asNpc && isUserAdmin()) {
     handle = normalizeHandle(asNpc.handle || asNpc);
-    name = asNpc.name || handle;
+    const npc = state.npcProfiles?.[handle];
+    name = asNpc.name || npc?.name || handle;
     uid = 'npc_' + handle;
   }
 
   if (!handle) {
     showToast('Seu @ não está definido.', 'err');
-    return;
+    return false;
+  }
+
+  // se é reply e o texto não começa com @handle, prefixa (estilo IG)
+  const parentId = replyTo?.id || null;
+  const parentHandle = normalizeHandle(replyTo?.handle || '');
+  if (parentHandle && !new RegExp('^@' + parentHandle + '\\b', 'i').test(body)) {
+    body = ('@' + parentHandle + ' ' + body).slice(0, 240);
   }
 
   const c = {
@@ -200,27 +215,61 @@ async function addComment(postId, text, asNpc) {
     uid, handle, name,
     createdAt: Date.now()
   };
+  if (parentId) {
+    c.parentId = parentId;
+    c.parentHandle = parentHandle;
+  }
+
   try {
-    // push só no path comments/ — regras permitem qualquer auth
     const commentRef = db.ref('posts/' + postId + '/comments').push();
     await commentRef.set(c);
     try {
       const post = state.posts.find(p => p.id === postId);
       const next = (post?.commentCount || 0) + 1;
       await db.ref('posts/' + postId + '/commentCount').set(next);
-      // notifica só se o dono do post for player real (não NPC)
+
+      // 1) dono do post (player real)
       if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
         await pushNotification(post.uid, {
-          type: 'comment',
+          type: parentId ? 'reply' : 'comment',
           fromHandle: handle,
           postId,
           text: body.slice(0, 80)
         });
       }
+
+      // 2) autor do comentário pai (reply) — se for player real e diferente do dono do post
+      if (parentId && post) {
+        const parent = (post.comments || {})[parentId];
+        if (parent && parent.uid && parent.uid !== uid && !String(parent.uid).startsWith('npc_')) {
+          if (parent.uid !== post.uid) {
+            await pushNotification(parent.uid, {
+              type: 'reply',
+              fromHandle: handle,
+              postId,
+              text: body.slice(0, 80)
+            });
+          }
+        } else if (parent && parentHandle) {
+          // parent pode ser só handle (comentário antigo); tenta achar uid
+          const parentUid = parent?.uid || resolveUidByHandle(parentHandle);
+          if (parentUid && parentUid !== uid && parentUid !== post.uid && !String(parentUid).startsWith('npc_')) {
+            await pushNotification(parentUid, {
+              type: 'reply',
+              fromHandle: handle,
+              postId,
+              text: body.slice(0, 80)
+            });
+          }
+        }
+      }
+
+      // 3) menções no texto (@handle)
+      await notifyMentions(body, postId, handle, uid);
     } catch (e2) {
       console.warn('comment meta', e2);
     }
-    showToast('Comentário publicado.');
+    return true;
   } catch (e) {
     console.error('addComment', e);
     const msg = (e && e.message) ? String(e.message) : '';
@@ -229,6 +278,7 @@ async function addComment(postId, text, asNpc) {
     } else {
       showToast('Erro no comentário. ' + (msg.slice(0, 80) || 'Tente de novo.'), 'err');
     }
+    return false;
   }
 }
 
@@ -370,17 +420,20 @@ async function pushNotification(toUid, payload) {
   } catch (e) { console.warn('notif', e); }
 }
 
-async function notifyMentions(text, postId, fromHandle) {
+async function notifyMentions(text, postId, fromHandle, fromUid = null) {
   const re = /@([a-z0-9_]{2,24})/gi;
   let m;
   const seen = new Set();
+  const myHandle = normalizeHandle(fromHandle);
   while ((m = re.exec(text || ''))) {
     const h = normalizeHandle(m[1]);
-    if (!h || seen.has(h)) continue;
+    if (!h || seen.has(h) || h === myHandle) continue;
     seen.add(h);
     const entry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
     if (entry) {
-      await pushNotification(entry[0], {
+      const toUid = entry[0];
+      if (fromUid && toUid === fromUid) continue;
+      await pushNotification(toUid, {
         type: 'mention',
         fromHandle,
         postId,

@@ -13,6 +13,7 @@ function renderNotifications() {
       ${state.notifications.map(n => {
         const label = n.type === 'like' ? 'curtiu sua publicação'
           : n.type === 'comment' ? 'comentou: ' + escapeHTML(n.text || '')
+          : n.type === 'reply' ? 'respondeu: ' + escapeHTML(n.text || '')
           : n.type === 'mention' ? 'mencionou você'
           : n.type === 'dm' ? 'enviou mensagem'
           : 'atividade';

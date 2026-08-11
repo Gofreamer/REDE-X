@@ -202,11 +202,59 @@ function openPostModal(id) {
 
 function closePostModal() {
   state.activePost = null;
+  state.replyTo = null;
   document.getElementById('post-modal')?.classList.remove('open');
   document.body.classList.remove('post-modal-open');
   if ((location.hash || '').startsWith('#post/')) {
     history.replaceState(null, '', location.pathname + location.search);
   }
+}
+
+function buildCommentTree(comments) {
+  const roots = [];
+  const byParent = {};
+  comments.forEach(c => {
+    if (c.parentId) {
+      if (!byParent[c.parentId]) byParent[c.parentId] = [];
+      byParent[c.parentId].push(c);
+    } else {
+      roots.push(c);
+    }
+  });
+  // replies órfãos (parent apagado) sobem pra raiz
+  comments.forEach(c => {
+    if (c.parentId && !comments.find(x => x.id === c.parentId) && !roots.includes(c)) {
+      roots.push(c);
+    }
+  });
+  return { roots, byParent };
+}
+
+function renderCommentBlock(c, postId, byParent, depth = 0) {
+  const replies = byParent[c.id] || [];
+  const replyTo = state.replyTo;
+  const isActive = replyTo && replyTo.id === c.id;
+  return `
+    <div class="ig-comment ${depth ? 'ig-comment-reply' : ''}" data-cid="${c.id}">
+      <div class="ig-comment-body">
+        ${avatarHTML({ handle: c.handle, name: c.name, avatar: c.avatar }, 'xs')}
+        <div class="ig-comment-main">
+          <div class="ig-comment-text">
+            <strong class="ig-comment-user" onclick="openProfile('${escapeHTML(normalizeHandle(c.handle))}')">${nameWithVerified(c.handle, c.handle)}</strong>
+            ${linkify(c.text)}
+          </div>
+          <div class="ig-comment-meta">
+            <span class="c-time" data-ts="${c.createdAt || ''}">${timeAgo(c.createdAt)}</span>
+            <button type="button" class="ig-comment-reply-btn ${isActive ? 'active' : ''}"
+              onclick="startReply('${postId}','${c.id}','${escapeHTML(normalizeHandle(c.handle))}')">Responder</button>
+          </div>
+        </div>
+      </div>
+      ${replies.length ? `
+        <div class="ig-comment-thread">
+          ${replies.map(r => renderCommentBlock(r, postId, byParent, depth + 1)).join('')}
+        </div>` : ''}
+    </div>`;
 }
 
 function renderPostModal(id) {
@@ -220,8 +268,10 @@ function renderPostModal(id) {
   const comments = Object.entries(p.comments || {})
     .map(([cid, c]) => ({ id: cid, ...c }))
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const { roots, byParent } = buildCommentTree(comments);
   const liked = !!(state.user && p.likes && p.likes[state.user.uid]);
   const saved = isSaved(p.id);
+  const replyTo = state.replyTo && state.replyTo.postId === id ? state.replyTo : null;
 
   root.innerHTML = `
     <div class="modal-post">
@@ -238,16 +288,29 @@ function renderPostModal(id) {
           <button class="icon-btn" onclick="closePostModal()">✕</button>
         </div>
         <div class="modal-comments">
-          ${p.caption ? `<div class="comment-row"><strong>${escapeHTML(p.handle)}</strong> ${linkify(p.caption)}</div>` : ''}
-          ${comments.map(c => `
-            <div class="comment-row">
-              <strong>${nameWithVerified(c.handle, c.handle)}</strong> ${linkify(c.text)}
-              <span class="c-time">${timeAgo(c.createdAt)}</span>
-            </div>`).join('') || '<p class="text-muted">Nenhum comentário.</p>'}
+          ${p.caption ? `
+            <div class="ig-comment ig-caption-row">
+              <div class="ig-comment-body">
+                ${avatarHTML(p, 'xs')}
+                <div class="ig-comment-main">
+                  <div class="ig-comment-text">
+                    <strong class="ig-comment-user" onclick="openProfile('${escapeHTML(normalizeHandle(p.handle))}')">${nameWithVerified(p.handle, p.handle)}</strong>
+                    ${linkify(p.caption)}
+                  </div>
+                  <div class="ig-comment-meta">
+                    <span class="c-time" data-ts="${p.createdAt || ''}">${timeAgo(p.createdAt)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>` : ''}
+          ${roots.length
+            ? roots.map(c => renderCommentBlock(c, p.id, byParent)).join('')
+            : '<p class="text-muted ig-comments-empty">Nenhum comentário ainda.</p>'}
         </div>
         <div class="modal-footer">
           <div class="ig-actions">
             <button class="icon-btn ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')">${liked ? '♥' : '♡'}</button>
+            <button class="icon-btn" onclick="document.getElementById('comment-input')?.focus()" title="Comentar">💬</button>
             <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link">↗</button>
             <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}">${saved ? '★' : '☆'}</button>
             <span class="ig-likes">${p.likeCount || 0} curtidas</span>
@@ -283,13 +346,42 @@ function renderPostModal(id) {
               </div>
             </div>
           ` : ''}
+          ${replyTo ? `
+            <div class="ig-reply-bar">
+              <span>Respondendo a <strong>@${escapeHTML(replyTo.handle)}</strong></span>
+              <button type="button" class="ig-reply-cancel" onclick="cancelReply()">✕</button>
+            </div>` : ''}
           <form class="comment-form" onsubmit="submitComment(event, '${p.id}')">
-            <input type="text" id="comment-input" maxlength="240" placeholder="Adicione um comentário…" class="input"/>
-            <button type="submit" class="btn btn-ghost btn-sm">Publicar</button>
+            <input type="text" id="comment-input" maxlength="240"
+              placeholder="${replyTo ? 'Responder a @' + escapeHTML(replyTo.handle) + '…' : 'Adicione um comentário…'}"
+              class="input" autocomplete="off"/>
+            <button type="submit" class="btn btn-ghost btn-sm comment-post-btn">Publicar</button>
           </form>
         </div>
       </div>
     </div>`;
+}
+
+function startReply(postId, commentId, handle) {
+  state.replyTo = { postId, id: commentId, handle: normalizeHandle(handle) };
+  renderPostModal(postId);
+  setTimeout(() => {
+    const input = document.getElementById('comment-input');
+    if (input) {
+      input.focus();
+      const val = input.value || '';
+      if (!val.includes('@' + state.replyTo.handle)) {
+        input.value = '@' + state.replyTo.handle + ' ';
+      }
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }, 30);
+}
+
+function cancelReply() {
+  const postId = state.replyTo?.postId || state.activePost;
+  state.replyTo = null;
+  if (postId) renderPostModal(postId);
 }
 
 async function submitComment(e, postId) {
@@ -298,8 +390,12 @@ async function submitComment(e, postId) {
   const text = input?.value || '';
   const asH = document.getElementById('comment-as-handle')?.value?.trim();
   const asNpc = asH && isUserAdmin() ? { handle: asH, name: asH } : null;
-  await addComment(postId, text, asNpc);
-  if (input) input.value = '';
+  const replyTo = state.replyTo && state.replyTo.postId === postId ? state.replyTo : null;
+  const ok = await addComment(postId, text, asNpc, replyTo);
+  if (ok) {
+    if (input) input.value = '';
+    state.replyTo = null;
+  }
 }
 
 function openStory(id) {

@@ -667,16 +667,31 @@ async function publishAiComments() {
   if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
 
   try {
+    const post = (typeof state !== 'undefined' ? state.posts : []).find(x => x.id === postId);
     for (const d of selected) {
+      const h = normalizeHandleLocal(d.handle);
+      const text = d.text.trim().slice(0, 240);
       await db.ref('posts/' + postId + '/comments').push({
-        text: d.text.trim().slice(0, 240),
-        uid: 'npc_' + normalizeHandleLocal(d.handle),
-        handle: normalizeHandleLocal(d.handle),
+        text,
+        uid: 'npc_' + h,
+        handle: h,
         name: d.name || d.handle,
         createdAt: Date.now() - Math.floor(Math.random() * 20 * 60000),
         bot: true,
         ai: true
       });
+      // notifica dono do post (player) + menções
+      if (typeof pushNotification === 'function' && post && post.uid && !String(post.uid).startsWith('npc_')) {
+        await pushNotification(post.uid, {
+          type: 'comment',
+          fromHandle: h,
+          postId,
+          text: text.slice(0, 80)
+        });
+      }
+      if (typeof notifyMentions === 'function') {
+        await notifyMentions(text, postId, h, 'npc_' + h);
+      }
     }
     const snap = await db.ref('posts/' + postId + '/comments').once('value');
     const n = snap.exists() ? Object.keys(snap.val()).length : 0;
