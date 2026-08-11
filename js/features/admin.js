@@ -478,7 +478,7 @@ async function openSessionModal() {
       },
       {
         name: 'label',
-        label: 'Rótulo (deixe vazio sem post para desativar)',
+        label: 'Rótulo (vazio + sem post = desativa)',
         value: state.siteSettings?.session?.label || '',
         placeholder: 'Noite do porto'
       }
@@ -489,6 +489,9 @@ async function openSessionModal() {
     await clearSessionMode();
     return;
   }
+  if (!data.postId && active && !(data.label || '').trim()) {
+    await clearSessionMode();
+    return;
+  }
   await setSessionMode({ postId: data.postId || null, label: data.label });
 }
-

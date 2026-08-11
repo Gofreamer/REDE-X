@@ -37,7 +37,7 @@ function renderFeed() {
       <button type="button" class="ff-btn ff-refresh" onclick="refreshFeed()" title="Atualizar">↻</button>
     </div>`;
 
-  const sessionBanner = (session.postId || (session.label && session.label !== 'Sessão')) ? `
+  const sessionBanner = session.postId || session.label ? `
     <div class="session-banner">
       <strong>Sessão</strong>
       <span>${escapeHTML(session.label || 'No ar esta noite')}</span>
