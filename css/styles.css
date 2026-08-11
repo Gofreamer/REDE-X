@@ -10,7 +10,7 @@
   --faint: #737373;
   --blue: #0095f6;
   --pink: #e1306c;
-  --grad: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  --grad: linear-gradient(90deg, #FF8A00, #FF3B30, #FF00B8);
   --sidebar-w: 244px;
   --rail-w: 320px;
   --feed-w: 470px;
@@ -1710,4 +1710,94 @@ table {
 }
 .nav-badge {
   flex-shrink: 0;
+}
+
+
+/* —— Brand Rede Global —— */
+.brand-logo-icon {
+  display: block;
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 12px rgba(255, 59, 48, 0.35));
+}
+.brand-logo-icon.sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  filter: drop-shadow(0 0 6px rgba(255, 59, 48, 0.3));
+}
+.brand-logo-icon.xs {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  filter: none;
+}
+.brand-wordmark {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(90deg, #FF8A00, #FF3B30, #FF00B8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-wordmark span {
+  background: linear-gradient(90deg, #FF3B30, #FF00B8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-block {
+  text-align: center;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.brand-block h1 {
+  margin: 0;
+  font-size: 1.85rem;
+}
+.brand-block .tagline {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 280px;
+  line-height: 1.4;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 20px;
+}
+.sidebar-logo-text {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.topbar-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  /* override old solid gradient text if needed */
+}
+.btn-primary {
+  background: linear-gradient(90deg, #FF8A00, #FF3B30, #FF00B8) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+.btn-follow {
+  background: linear-gradient(90deg, #FF8A00, #FF00B8) !important;
 }
