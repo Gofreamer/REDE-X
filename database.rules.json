@@ -22,9 +22,13 @@
       }
     },
     "following": {
+      ".read": "auth != null",
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "$handle": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
       }
     },
     "mediaLibrary": {
@@ -62,14 +66,37 @@
       ".read": "auth != null",
       ".indexOn": ["createdAt"],
       "$pid": {
-        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.hasChild('likes') || newData.hasChild('likeCount') || newData.hasChild('comments') || newData.hasChild('commentCount') || newData.hasChild('pinned') || newData.hasChild('publishAt') || newData.hasChild('scheduled') || newData.hasChild('createdAt') || newData.hasChild('timeOverride'))",
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
         "likes": {
-          "$uid": { ".write": "auth != null && auth.uid === $uid" }
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
         },
-        "likeCount": { ".write": "auth != null" },
-        "comments": { ".write": "auth != null" },
-        "commentCount": { ".write": "auth != null" },
+        "likeCount": {
+          ".write": "auth != null"
+        },
+        "comments": {
+          ".write": "auth != null",
+          "$cid": {
+            ".write": "auth != null"
+          }
+        },
+        "commentCount": {
+          ".write": "auth != null"
+        },
         "pinned": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "publishAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "scheduled": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "createdAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "timeOverride": {
           ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
         }
       }

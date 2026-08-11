@@ -31,7 +31,7 @@ function renderDMs() {
         }).join('') : `<p class="text-muted" style="padding:16px">Nenhuma conversa. Toque em Nova.</p>`}
       </div>
       <div class="dm-chat">
-        ${active ? renderDmChat(active) : `<div class="empty"><h3>DMs</h3><p>Converse com seus resenheiros aqui.</p></div>`}
+        ${active ? renderDmChat(active) : `<div class="empty"><h3>DMs</h3><p>Converse com NPCs da mesa. O mestre responde como NPC.</p></div>`}
       </div>
     </div>`;
 }

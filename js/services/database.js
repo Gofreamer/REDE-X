@@ -159,12 +159,19 @@ async function toggleLike(postId) {
 }
 
 async function addComment(postId, text, asNpc) {
-  if (!state.user || !state.profile) return;
+  if (!state.user) {
+    showToast('Faça login para comentar.', 'err');
+    return;
+  }
+  if (!state.profile) {
+    showToast('Perfil ainda carregando… tente de novo.', 'err');
+    return;
+  }
   const body = (text || '').trim().slice(0, 240);
   if (!body) return;
 
-  let handle = state.profile.handle;
-  let name = state.profile.name;
+  let handle = normalizeHandle(state.profile.handle);
+  let name = state.profile.name || handle;
   let uid = state.user.uid;
 
   if (asNpc && isUserAdmin()) {
@@ -173,26 +180,36 @@ async function addComment(postId, text, asNpc) {
     uid = 'npc_' + handle;
   }
 
+  if (!handle) {
+    showToast('Seu @ não está definido.', 'err');
+    return;
+  }
+
   const c = {
     text: body,
     uid, handle, name,
     createdAt: Date.now()
   };
   try {
-    await db.ref(`posts/${postId}/comments`).push(c);
-    const post = state.posts.find(p => p.id === postId);
-    await db.ref(`posts/${postId}/commentCount`).set((post?.commentCount || 0) + 1);
-    // notifica dono do post
-    if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
-      await pushNotification(post.uid, {
-        type: 'comment',
-        fromHandle: handle,
-        postId,
-        text: body.slice(0, 80)
-      });
+    await db.ref('posts/' + postId + '/comments').push(c);
+    try {
+      const post = state.posts.find(p => p.id === postId);
+      const next = (post?.commentCount || 0) + 1;
+      await db.ref('posts/' + postId + '/commentCount').set(next);
+      if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
+        await pushNotification(post.uid, {
+          type: 'comment',
+          fromHandle: handle,
+          postId,
+          text: body.slice(0, 80)
+        });
+      }
+    } catch (e2) {
+      console.warn('comment meta', e2);
     }
   } catch (e) {
-    showToast('Erro no comentário.', 'err');
+    console.error('addComment', e);
+    showToast('Erro no comentário (permissão?).', 'err');
   }
 }
 
@@ -530,29 +547,19 @@ async function toggleFollow(handle) {
   if (!state.user) return;
   const h = normalizeHandle(handle);
   if (!h) return;
+  // player NÃO grava em npcProfiles (rules = só admin) — só em following/{uid}
   const path = 'following/' + state.user.uid + '/' + h;
   try {
     if (isFollowing(h)) {
       await db.ref(path).remove();
-      // decrement soft count if npc
-      const npc = state.npcProfiles?.[h];
-      if (npc) {
-        const n = Math.max(0, (Number(npc.followersCount) || 0) - 1);
-        await db.ref('npcProfiles/' + h + '/followersCount').set(n);
-      }
       showToast('Deixou de seguir @' + h);
     } else {
       await db.ref(path).set({ at: Date.now(), handle: h });
-      const npc = state.npcProfiles?.[h];
-      if (npc) {
-        const n = (Number(npc.followersCount) || 0) + 1;
-        await db.ref('npcProfiles/' + h + '/followersCount').set(n);
-      }
       showToast('Seguindo @' + h);
     }
   } catch (e) {
-    console.error(e);
-    showToast('Erro ao seguir.', 'err');
+    console.error('toggleFollow', e);
+    showToast('Erro ao seguir (permissão?).', 'err');
   }
 }
 
