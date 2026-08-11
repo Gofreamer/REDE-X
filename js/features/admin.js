@@ -77,6 +77,7 @@ function renderAdminVivo() {
       <div class="admin-actions" style="margin-top:14px">
         <button type="button" class="btn btn-primary" onclick="seedCityFeed()">Popular fio</button>
         <button type="button" class="btn btn-ghost" onclick="openSessionModal()">Modo sessão</button>
+        <button type="button" class="btn btn-ghost" onclick="clearSessionMode()">Desativar sessão</button>
         <button type="button" class="btn btn-ghost" onclick="showView('feed')">Ver fio</button>
       </div>
     </section>`;
@@ -147,6 +148,7 @@ function renderAdminMesa() {
       <div class="admin-actions">
         <button type="button" class="btn btn-primary" onclick="seedCityFeed()">Popular fio (seed)</button>
         <button type="button" class="btn btn-ghost" onclick="openSessionModal()">Modo sessão</button>
+        <button type="button" class="btn btn-ghost" onclick="clearSessionMode()">Desativar sessão</button>
       </div>
       <p class="hint">Seed: 6 posts + perfis NPC. Sessão: destaque no topo do fio.</p>
       ${session.label || session.postId ? `
@@ -456,9 +458,10 @@ async function publishNow(postId) {
 
 async function openSessionModal() {
   const posts = state.posts.filter(p => !p.publishAt || p.publishAt <= Date.now()).slice(0, 30);
+  const active = !!(state.siteSettings?.session?.postId || state.siteSettings?.session?.label);
   const data = await rgForm({
     title: 'Modo sessão',
-    confirmLabel: 'Ativar',
+    confirmLabel: active ? 'Salvar' : 'Ativar',
     fields: [
       {
         name: 'postId',
@@ -466,21 +469,29 @@ async function openSessionModal() {
         type: 'select',
         value: state.siteSettings?.session?.postId || '',
         options: [
-          { value: '', label: '— nenhum —' },
+          { value: '', label: '— nenhum (desativa destaque) —' },
           ...posts.map(p => ({
             value: p.id,
-            label: `@${p.handle} · ${(p.caption || '').slice(0, 32) || p.id.slice(0, 8)}`
+            label: '@' + p.handle + ' · ' + ((p.caption || '').slice(0, 32) || p.id.slice(0, 8))
           }))
         ]
       },
       {
         name: 'label',
-        label: 'Rótulo',
-        value: state.siteSettings?.session?.label || 'Sessão de hoje',
+        label: 'Rótulo (vazio + sem post = desativa)',
+        value: state.siteSettings?.session?.label || '',
         placeholder: 'Noite do porto'
       }
     ]
   });
   if (!data) return;
+  if (!data.postId && !(data.label || '').trim()) {
+    await clearSessionMode();
+    return;
+  }
+  if (!data.postId && active && !(data.label || '').trim()) {
+    await clearSessionMode();
+    return;
+  }
   await setSessionMode({ postId: data.postId || null, label: data.label });
 }

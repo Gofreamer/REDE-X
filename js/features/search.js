@@ -107,6 +107,12 @@ function getProfileBundle(handle) {
   const userEntry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
   if (userEntry) {
     const [uid, u] = userEntry;
+    const isMe = !!(state.user && uid === state.user.uid);
+    // "seguindo" do player: conta real da lista following/
+    let followingN = Number(u.followingCount) || 0;
+    if (isMe) {
+      followingN = Object.keys(state.following || {}).length;
+    }
     return {
       kind: 'user',
       uid,
@@ -115,8 +121,8 @@ function getProfileBundle(handle) {
       bio: u.bio || '',
       avatar: u.avatar || '',
       followers: Number(u.followersCount) || 0,
-      following: Number(u.followingCount) || 0,
-      isMe: state.user && uid === state.user.uid,
+      following: followingN,
+      isMe,
       suspended: !!u.suspended,
       banned: !!u.banned
     };

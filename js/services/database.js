@@ -386,19 +386,29 @@ async function markNotifsRead() {
   }
 }
 
-async function setSessionMode({ postId, storyId, label }) {
+async function setSessionMode({ postId, storyId, label, clear }) {
   if (!isUserAdmin()) return;
   try {
+    if (clear || (!postId && !storyId && !(label || '').trim())) {
+      await db.ref('siteSettings/session').remove();
+      showToast('Modo sessão desativado.');
+      return;
+    }
     await db.ref('siteSettings/session').set({
       postId: postId || null,
       storyId: storyId || null,
-      label: label || 'Sessão',
+      label: (label || 'Sessão').trim() || 'Sessão',
       updatedAt: Date.now()
     });
     showToast('Modo sessão atualizado.');
   } catch (e) {
+    console.error(e);
     showToast('Erro no modo sessão.', 'err');
   }
+}
+
+async function clearSessionMode() {
+  return setSessionMode({ clear: true });
 }
 
 async function addHighlight(handle, { title, image }) {
@@ -547,7 +557,7 @@ async function toggleFollow(handle) {
   if (!state.user) return;
   const h = normalizeHandle(handle);
   if (!h) return;
-  // player NÃO grava em npcProfiles (rules = só admin) — só em following/{uid}
+  // player só grava em following/{uid} (+ followingCount no próprio users/)
   const path = 'following/' + state.user.uid + '/' + h;
   try {
     if (isFollowing(h)) {
@@ -557,9 +567,23 @@ async function toggleFollow(handle) {
       await db.ref(path).set({ at: Date.now(), handle: h });
       showToast('Seguindo @' + h);
     }
+    // atualiza contador no perfil do player (ele pode escrever no próprio users/)
+    await syncMyFollowingCount();
   } catch (e) {
     console.error('toggleFollow', e);
     showToast('Erro ao seguir (permissão?).', 'err');
+  }
+}
+
+async function syncMyFollowingCount() {
+  if (!state.user) return;
+  try {
+    const snap = await db.ref('following/' + state.user.uid).once('value');
+    const data = snap.val() || {};
+    const n = Object.keys(data).length;
+    await db.ref('users/' + state.user.uid + '/followingCount').set(n);
+  } catch (e) {
+    console.warn('syncMyFollowingCount', e);
   }
 }
 
