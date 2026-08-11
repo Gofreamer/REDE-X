@@ -99,6 +99,7 @@ function renderSearchResults(query) {
 function openProfile(handle) {
   closeSearch();
   state.viewProfileHandle = normalizeHandle(handle);
+  state.profileTab = 'posts';
   showView('profile');
 }
 
@@ -123,6 +124,7 @@ function getProfileBundle(handle) {
       followers: Number(u.followersCount) || 0,
       following: followingN,
       isMe,
+      verified: !!u.verified,
       suspended: !!u.suspended,
       banned: !!u.banned
     };
@@ -139,6 +141,7 @@ function getProfileBundle(handle) {
     followers: Number(npc.followersCount) || 0,
     following: Number(npc.followingCount) || 0,
     isMe: false,
+    verified: !!npc.verified,
     suspended: !!npc.suspended,
     banned: !!npc.banned
   };

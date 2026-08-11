@@ -630,3 +630,81 @@ async function adminSetPostTime(postId, isoOrOffset) {
     showToast('Erro no horário.', 'err');
   }
 }
+
+
+/* ── Saves (coleção privada do player) ── */
+function listenSaves(uid) {
+  if (!uid) return;
+  db.ref('saves/' + uid).on('value', snap => {
+    state.saves = snap.val() || {};
+    if (state.currentView === 'feed') renderFeed();
+    if (state.currentView === 'profile') renderProfile();
+    if (state.activePost) renderPostModal(state.activePost);
+  });
+}
+
+function isSaved(postId) {
+  return !!(state.saves && state.saves[postId]);
+}
+
+async function toggleSave(postId) {
+  if (!state.user || !postId) return;
+  const path = 'saves/' + state.user.uid + '/' + postId;
+  try {
+    if (isSaved(postId)) {
+      await db.ref(path).remove();
+      showToast('Removido dos salvos.');
+    } else {
+      await db.ref(path).set({ at: Date.now(), postId });
+      showToast('Salvo na coleção.');
+    }
+  } catch (e) {
+    console.error('toggleSave', e);
+    showToast('Erro ao salvar.', 'err');
+  }
+}
+
+/* ── Story viewers ── */
+async function recordStoryView(storyId) {
+  if (!state.user || !storyId) return;
+  try {
+    await db.ref('stories/' + storyId + '/viewers/' + state.user.uid).set({
+      handle: state.profile?.handle || '',
+      name: state.profile?.name || '',
+      at: Date.now()
+    });
+  } catch (e) {
+    console.warn('recordStoryView', e);
+  }
+}
+
+/* ── Verified ── */
+async function toggleVerified(handle, kind) {
+  if (!isUserAdmin()) return;
+  const h = normalizeHandle(handle);
+  try {
+    if (kind === 'user') {
+      const entry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+      if (!entry) return;
+      const cur = !!(entry[1].verified);
+      await db.ref('users/' + entry[0] + '/verified').set(!cur);
+      showToast(!cur ? 'Verificado.' : 'Verificação removida.');
+    } else {
+      const npc = (state.npcProfiles || {})[h];
+      const cur = !!(npc && npc.verified);
+      await db.ref('npcProfiles/' + h + '/verified').set(!cur);
+      showToast(!cur ? 'NPC verificado.' : 'Verificação removida.');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Erro no verificado.', 'err');
+  }
+}
+
+function isVerifiedProfile(handle) {
+  const h = normalizeHandle(handle);
+  const userEntry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+  if (userEntry) return !!(userEntry[1].verified);
+  const npc = (state.npcProfiles || {})[h];
+  return !!(npc && npc.verified);
+}

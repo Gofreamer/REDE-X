@@ -26,7 +26,7 @@ function renderProfile() {
       ${banned ? `<div class="account-status-banner banned"><strong>Conta banida</strong><span>Esta conta foi desativada permanentemente pela Rede Global.</span></div>` : ''}
       ${suspended && !banned ? `<div class="account-status-banner suspended"><strong>Conta suspensa</strong><span>Atividade limitada · decisão da moderação da cidade.</span></div>` : ''}
       <div class="ig-profile-top mobile-only">
-        <strong>${escapeHTML(bundle.handle)}</strong>
+        <strong>${escapeHTML(bundle.handle)}${verifiedBadgeHTML(!!bundle.verified)}</strong>
         ${isMe ? `<button type="button" class="icon-btn" onclick="openEditProfile()">⚙</button>` : ''}
       </div>
 
@@ -34,7 +34,7 @@ function renderProfile() {
         ${avatarHTML(bundle, 'xl')}
         <div class="ig-profile-meta">
           <div class="ig-profile-userline desktop-only">
-            <h2 class="ig-username">${escapeHTML(bundle.handle)}</h2>
+            <h2 class="ig-username">${escapeHTML(bundle.handle)}${verifiedBadgeHTML(!!bundle.verified)}</h2>
             ${isMe
               ? `<button type="button" class="btn btn-edit" onclick="openEditProfile()">Editar perfil</button>`
               : `${bundle.kind === 'npc' || !bundle.isMe ? `
@@ -43,6 +43,7 @@ function renderProfile() {
                   </button>` : ''}
                  <button type="button" class="btn btn-edit" onclick="startDmWithHandle('${escapeHTML(bundle.handle)}')">Mensagem</button>
                  ${isUserAdmin() ? `<button type="button" class="btn btn-edit" onclick="openEditNpc('${escapeHTML(bundle.handle)}')">Editar NPC</button>` : ''}`}
+            ${isUserAdmin() ? `<button type="button" class="btn btn-edit" onclick="toggleVerified('${escapeHTML(bundle.handle)}','${escapeHTML(bundle.kind)}')">${bundle.verified ? 'Remover ✓' : 'Verificar ✓'}</button>` : ''}
           </div>
           <div class="ig-stats">
             <div class="ig-stat"><strong>${posts.length}</strong><span>publicacoes</span></div>
@@ -65,7 +66,7 @@ function renderProfile() {
             </div>
           ` : ''}
           <div class="ig-profile-bio-block desktop-only">
-            <div class="ig-display-name">${escapeHTML(bundle.name)}</div>
+            <div class="ig-display-name">${escapeHTML(bundle.name)}${verifiedBadgeHTML(!!bundle.verified)}</div>
             ${bundle.bio ? `<div class="ig-bio">${linkify(bundle.bio)}</div>` : ''}
             ${bundle.kind === 'npc' ? `<div class="ig-badge-npc">Conta da mesa · NPC</div>` : ''}
           </div>
@@ -73,7 +74,7 @@ function renderProfile() {
       </div>
 
       <div class="ig-profile-bio-block mobile-only">
-        <div class="ig-display-name">${escapeHTML(bundle.name)}</div>
+        <div class="ig-display-name">${escapeHTML(bundle.name)}${verifiedBadgeHTML(!!bundle.verified)}</div>
         ${bundle.bio ? `<div class="ig-bio">${linkify(bundle.bio)}</div>` : ''}
         ${bundle.kind === 'npc' ? `<div class="ig-badge-npc">Conta da mesa · NPC</div>` : ''}
         ${isMe
@@ -88,16 +89,33 @@ function renderProfile() {
       ${renderHighlightsStrip(bundle.handle, isMe)}
 
       <div class="ig-profile-tabs">
-        <button type="button" class="ig-tab active">Publicacoes</button>
+        <button type="button" class="ig-tab ${state.profileTab !== 'saved' ? 'active' : ''}" onclick="setProfileTab('posts')">Publicações</button>
+        ${isMe ? `<button type="button" class="ig-tab ${state.profileTab === 'saved' ? 'active' : ''}" onclick="setProfileTab('saved')">Salvos</button>` : ''}
       </div>
 
       <div class="profile-grid">
-        ${posts.length
-          ? posts.map(post => `
+        ${(() => {
+          if (isMe && state.profileTab === 'saved') {
+            const savedIds = Object.keys(state.saves || {});
+            const savedPosts = savedIds
+              .map(id => state.posts.find(p => p.id === id))
+              .filter(Boolean)
+              .sort((a, b) => (state.saves[b.id]?.at || 0) - (state.saves[a.id]?.at || 0));
+            if (!savedPosts.length) {
+              return `<div class="grid-empty">Nenhum post salvo.<br><span class="text-muted">Toque na estrela nos posts pra guardar evidências.</span></div>`;
+            }
+            return savedPosts.map(post => `
               <button type="button" class="grid-cell" onclick="openPostModal('${post.id}')">
                 <img src="${escapeHTML(post.image)}" alt="" loading="lazy"/>
-              </button>`).join('')
-          : `<div class="grid-empty">Ainda nao ha publicacoes.</div>`}
+              </button>`).join('');
+          }
+          return posts.length
+            ? posts.map(post => `
+                <button type="button" class="grid-cell" onclick="openPostModal('${post.id}')">
+                  <img src="${escapeHTML(post.image)}" alt="" loading="lazy"/>
+                </button>`).join('')
+            : `<div class="grid-empty">Ainda não há publicações.</div>`;
+        })()}
       </div>
     </div>
 
@@ -148,6 +166,11 @@ function formatCount(n) {
   if (n >= 10000) return Math.floor(n / 1000) + ' mil';
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + ' mil';
   return String(n);
+}
+
+function setProfileTab(tab) {
+  state.profileTab = tab === 'saved' ? 'saved' : 'posts';
+  renderProfile();
 }
 
 function openEditProfile() {

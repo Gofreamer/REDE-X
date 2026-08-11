@@ -1801,3 +1801,107 @@ table {
 .btn-follow {
   background: linear-gradient(90deg, #FF8A00, #FF00B8) !important;
 }
+
+/* ── Verified badge ── */
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3897f0, #1a73e8);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  vertical-align: middle;
+  line-height: 1;
+  position: relative;
+  top: -1px;
+}
+.ig-username .verified-badge,
+.ig-display-name .verified-badge {
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+/* ── Save / share buttons ── */
+.icon-btn.saved {
+  color: #f5c518;
+}
+.ig-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Story viewers (admin) ── */
+.story-view-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  background: rgba(0,0,0,0.45);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.story-viewers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 42%;
+  overflow-y: auto;
+  background: linear-gradient(transparent, rgba(0,0,0,0.92) 18%);
+  color: #fff;
+  padding-top: 24px;
+  z-index: 2;
+}
+.story-viewers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 6px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.story-viewers-head span {
+  background: rgba(255,255,255,0.15);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+.story-viewer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+.sv-handle { font-weight: 700; min-width: 90px; }
+.sv-name { flex: 1; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-time { opacity: 0.5; font-size: 0.75rem; }
+
+/* ── Mobile topbar notif ── */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.topbar-notif {
+  position: relative;
+}
+.topbar-notif .nav-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  margin-left: 0;
+  min-width: 16px;
+  height: 16px;
+  font-size: 0.6rem;
+  pointer-events: none;
+}
+.story-full {
+  position: relative;
+}

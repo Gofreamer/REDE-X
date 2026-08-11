@@ -13,6 +13,7 @@ const state = {
   siteSettings: {},
   following: {},
   mediaLibrary: [],
+  saves: {},          // postId -> timestamp (coleção privada do player)
   currentView: 'feed',
   viewProfileHandle: null,
   activePost: null,
@@ -21,6 +22,7 @@ const state = {
   unreadDms: 0,
   feedFilter: 'all', // all | following | tag
   feedTag: null,
+  profileTab: 'posts', // posts | saved
   postsLoaded: false,
   profileLoaded: false
 };

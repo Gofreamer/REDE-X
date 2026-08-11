@@ -134,14 +134,15 @@ function renderStories() {
 
 function renderPostCard(p) {
   const liked = !!(state.user && p.likes && p.likes[state.user.uid]);
+  const saved = isSaved(p.id);
   const canMod = isUserAdmin() || p.uid === state.user?.uid;
 
   return `
-    <article class="ig-card ${p.pinned ? 'pinned' : ''}">
+    <article class="ig-card ${p.pinned ? 'pinned' : ''}" id="post-${p.id}">
       <header class="ig-head">
         ${avatarHTML(p, 'sm')}
         <div class="ig-user" style="cursor:pointer" onclick="openProfile('${escapeHTML(normalizeHandle(p.handle))}')">
-          <strong>${escapeHTML(p.name || p.handle)}</strong>
+          <strong>${nameWithVerified(p.name || p.handle, p.handle)}</strong>
           <span>${displayHandle(p.handle)} · <span data-ts="${p.createdAt || ''}">${timeAgo(p.createdAt)}</span></span>
         </div>
         ${p.pinned ? '<span class="pin-badge">Fixado</span>' : ''}
@@ -160,6 +161,10 @@ function renderPostCard(p) {
           ${liked ? '♥' : '♡'}
         </button>
         <button class="icon-btn" onclick="openPostModal('${p.id}')" aria-label="Comentar">💬</button>
+        <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link" aria-label="Compartilhar">↗</button>
+        <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}" aria-label="Salvar">
+          ${saved ? '★' : '☆'}
+        </button>
         ${isUserAdmin() ? `<button class="icon-btn" onclick="togglePin('${p.id}')" title="Fixar">📌</button>` : ''}
       </div>
 
@@ -189,11 +194,17 @@ function openPostModal(id) {
   state.activePost = id;
   renderPostModal(id);
   document.getElementById('post-modal')?.classList.add('open');
+  if (location.hash !== '#post/' + id) {
+    history.replaceState(null, '', '#post/' + id);
+  }
 }
 
 function closePostModal() {
   state.activePost = null;
   document.getElementById('post-modal')?.classList.remove('open');
+  if ((location.hash || '').startsWith('#post/')) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
 }
 
 function renderPostModal(id) {
@@ -208,6 +219,7 @@ function renderPostModal(id) {
     .map(([cid, c]) => ({ id: cid, ...c }))
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const liked = !!(state.user && p.likes && p.likes[state.user.uid]);
+  const saved = isSaved(p.id);
 
   root.innerHTML = `
     <div class="modal-post">
@@ -218,7 +230,7 @@ function renderPostModal(id) {
         <div class="ig-head">
           ${avatarHTML(p, 'sm')}
           <div class="ig-user">
-            <strong>${escapeHTML(p.name || p.handle)}</strong>
+            <strong>${nameWithVerified(p.name || p.handle, p.handle)}</strong>
             <span>${displayHandle(p.handle)}</span>
           </div>
           <button class="icon-btn" onclick="closePostModal()">✕</button>
@@ -227,13 +239,15 @@ function renderPostModal(id) {
           ${p.caption ? `<div class="comment-row"><strong>${escapeHTML(p.handle)}</strong> ${linkify(p.caption)}</div>` : ''}
           ${comments.map(c => `
             <div class="comment-row">
-              <strong>${escapeHTML(c.handle)}</strong> ${linkify(c.text)}
+              <strong>${nameWithVerified(c.handle, c.handle)}</strong> ${linkify(c.text)}
               <span class="c-time">${timeAgo(c.createdAt)}</span>
             </div>`).join('') || '<p class="text-muted">Nenhum comentário.</p>'}
         </div>
         <div class="modal-footer">
           <div class="ig-actions">
             <button class="icon-btn ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')">${liked ? '♥' : '♡'}</button>
+            <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link">↗</button>
+            <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}">${saved ? '★' : '☆'}</button>
             <span class="ig-likes">${p.likeCount || 0} curtidas</span>
           </div>
           ${isUserAdmin() ? `
@@ -292,19 +306,66 @@ function openStory(id) {
   const modal = document.getElementById('story-modal');
   const body = document.getElementById('story-modal-body');
   if (!modal || !body) return;
+
+  // registra viewer (player ou admin)
+  recordStoryView(id);
+
+  const viewers = Object.entries(s.viewers || {})
+    .map(([uid, v]) => ({ uid, ...v }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+
+  const viewersHTML = isUserAdmin() ? `
+    <div class="story-viewers" onclick="event.stopPropagation()">
+      <div class="story-viewers-head">
+        <strong>Quem viu</strong>
+        <span>${viewers.length}</span>
+      </div>
+      ${viewers.length
+        ? viewers.map(v => `
+            <div class="story-viewer-row">
+              <span class="sv-handle">@${escapeHTML(v.handle || '?')}</span>
+              <span class="sv-name">${escapeHTML(v.name || '')}</span>
+              <span class="sv-time">${timeAgo(v.at)}</span>
+            </div>`).join('')
+        : '<p class="text-muted" style="padding:8px 12px;margin:0">Ninguém ainda.</p>'}
+    </div>` : '';
+
   body.innerHTML = `
     <div class="story-full" onclick="closeStory()">
       <div class="story-full-top">
-        <strong>${displayHandle(s.handle)}</strong>
+        <strong>${displayHandle(s.handle)}${verifiedBadgeHTML(s.handle)}</strong>
         <span>${timeAgo(s.createdAt)}</span>
+        ${isUserAdmin() && viewers.length ? `<span class="story-view-count">${viewers.length} viu</span>` : ''}
       </div>
       <img src="${escapeHTML(s.image)}" alt=""/>
+      ${viewersHTML}
     </div>`;
   modal.classList.add('open');
 }
 
 function closeStory() {
   document.getElementById('story-modal')?.classList.remove('open');
+}
+
+async function sharePost(postId) {
+  const url = `${location.origin}${location.pathname}#post/${postId}`;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    showToast('Link copiado.');
+  } catch (e) {
+    showToast('Não deu pra copiar. Link: ' + url, 'err');
+  }
 }
 
 

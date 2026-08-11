@@ -1,0 +1,129 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        "isAdmin": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('isAdmin').val() === true || newData.val() === false || newData.val() == null)"
+        },
+        "verified": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        }
+      }
+    },
+    "handles": {
+      ".read": true,
+      "$handle": {
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
+      }
+    },
+    "npcProfiles": {
+      ".read": "auth != null",
+      "$handle": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+      }
+    },
+    "following": {
+      ".read": "auth != null",
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        "$handle": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "mediaLibrary": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+    },
+    "highlights": {
+      ".read": "auth != null",
+      "$handle": {
+        ".write": "auth != null"
+      }
+    },
+    "siteSettings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "dms": {
+      ".read": "auth != null",
+      "$tid": {
+        ".write": "auth != null",
+        "messages": {
+          "$mid": {
+            ".write": "auth != null"
+          }
+        }
+      }
+    },
+    "posts": {
+      ".read": "auth != null",
+      ".indexOn": ["createdAt"],
+      "$pid": {
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        "likes": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        },
+        "likeCount": {
+          ".write": "auth != null"
+        },
+        "comments": {
+          ".write": "auth != null",
+          "$cid": {
+            ".write": "auth != null"
+          }
+        },
+        "commentCount": {
+          ".write": "auth != null"
+        },
+        "pinned": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "publishAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "scheduled": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "createdAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        },
+        "timeOverride": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true"
+        }
+      }
+    },
+    "stories": {
+      ".read": "auth != null",
+      ".indexOn": ["createdAt"],
+      "$sid": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true",
+        "viewers": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    },
+    "saves": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$postId": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

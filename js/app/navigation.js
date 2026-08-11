@@ -21,5 +21,6 @@ function showView(view) {
 
 function goMyProfile() {
   state.viewProfileHandle = state.profile?.handle || null;
+  state.profileTab = 'posts';
   showView('profile');
 }

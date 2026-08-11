@@ -85,6 +85,18 @@ function avatarHTML(p, sizeClass = '') {
   return `<div class="avatar ${sizeClass}"><span>${letter}</span></div>`;
 }
 
+function verifiedBadgeHTML(handleOrFlag) {
+  let ok = false;
+  if (typeof handleOrFlag === 'boolean') ok = handleOrFlag;
+  else if (typeof isVerifiedProfile === 'function') ok = isVerifiedProfile(handleOrFlag);
+  if (!ok) return '';
+  return `<span class="verified-badge" title="Verificado" aria-label="Verificado">✓</span>`;
+}
+
+function nameWithVerified(name, handle) {
+  return `${escapeHTML(name || handle || '')}${verifiedBadgeHTML(handle)}`;
+}
+
 let _confirmResolve = null;
 function rgConfirm({ title = 'Confirmar', body = '', confirmLabel = 'OK', danger = false } = {}) {
   ensureConfirm();
