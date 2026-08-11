@@ -79,9 +79,10 @@
           ".write": "auth != null"
         },
         "comments": {
+          ".read": "auth != null",
           ".write": "auth != null",
           "$cid": {
-            ".write": "auth != null"
+            ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
           }
         },
         "commentCount": {

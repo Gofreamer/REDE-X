@@ -194,6 +194,7 @@ function openPostModal(id) {
   state.activePost = id;
   renderPostModal(id);
   document.getElementById('post-modal')?.classList.add('open');
+  document.body.classList.add('post-modal-open');
   if (location.hash !== '#post/' + id) {
     history.replaceState(null, '', '#post/' + id);
   }
@@ -202,6 +203,7 @@ function openPostModal(id) {
 function closePostModal() {
   state.activePost = null;
   document.getElementById('post-modal')?.classList.remove('open');
+  document.body.classList.remove('post-modal-open');
   if ((location.hash || '').startsWith('#post/')) {
     history.replaceState(null, '', location.pathname + location.search);
   }

@@ -191,11 +191,14 @@ async function addComment(postId, text, asNpc) {
     createdAt: Date.now()
   };
   try {
-    await db.ref('posts/' + postId + '/comments').push(c);
+    // push só no path comments/ — regras permitem qualquer auth
+    const commentRef = db.ref('posts/' + postId + '/comments').push();
+    await commentRef.set(c);
     try {
       const post = state.posts.find(p => p.id === postId);
       const next = (post?.commentCount || 0) + 1;
       await db.ref('posts/' + postId + '/commentCount').set(next);
+      // notifica só se o dono do post for player real (não NPC)
       if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
         await pushNotification(post.uid, {
           type: 'comment',
@@ -207,9 +210,15 @@ async function addComment(postId, text, asNpc) {
     } catch (e2) {
       console.warn('comment meta', e2);
     }
+    showToast('Comentário publicado.');
   } catch (e) {
     console.error('addComment', e);
-    showToast('Erro no comentário (permissão?).', 'err');
+    const msg = (e && e.message) ? String(e.message) : '';
+    if (/permission|PERMISSION/i.test(msg)) {
+      showToast('Sem permissão pra comentar. Admin: publique database.rules.json no Firebase.', 'err');
+    } else {
+      showToast('Erro no comentário. ' + (msg.slice(0, 80) || 'Tente de novo.'), 'err');
+    }
   }
 }
 
