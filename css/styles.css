@@ -108,15 +108,17 @@ img { max-width: 100%; display: block; }
   min-height: 100vh;
   display: flex;
   background: var(--bg);
+  /* espaço para sidebar + rail fixos */
+  padding-left: var(--sidebar-w);
+  padding-right: var(--rail-w);
 }
 
 .sidebar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  align-self: flex-start; /* sem isso o flex estica a sidebar na altura do feed e o sticky não gruda */
+  left: 0;
   height: 100vh;
   width: var(--sidebar-w);
-  flex-shrink: 0;
   border-right: 1px solid var(--line);
   padding: 20px 12px 16px;
   display: flex;
@@ -231,14 +233,15 @@ img { max-width: 100%; display: block; }
 }
 
 .right-rail {
-  width: var(--rail-w);
-  flex-shrink: 0;
-  padding: 36px 16px 24px 8px;
-  position: sticky;
+  position: fixed;
   top: 0;
-  align-self: flex-start;
+  right: 0;
+  width: var(--rail-w);
   height: 100vh;
+  padding: 36px 16px 24px 8px;
   overflow: auto;
+  background: var(--bg);
+  z-index: 15;
 }
 .rail-me { margin-bottom: 20px; }
 .rail-me-row, .rail-row {
@@ -647,6 +650,7 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 
 @media (max-width: 1160px) {
   .right-rail { display: none; }
+  .app { padding-right: 0; }
   :root { --sidebar-w: 72px; }
   .side-label, .sidebar-logo-text, .side-user { display: none; }
   .sidebar { width: 72px; padding: 16px 8px; align-items: center; }
@@ -660,7 +664,12 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
   .right-rail { display: none; }
   .mobile-topbar { display: flex; }
   .tabbar { display: flex; }
-  .app { display: block; padding-bottom: 60px; }
+  .app {
+    display: block;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 60px;
+  }
   .center-col { width: 100%; }
   .shell {
     max-width: 100%;
