@@ -1801,3 +1801,35 @@ table {
 .btn-follow {
   background: linear-gradient(90deg, #FF8A00, #FF00B8) !important;
 }
+
+
+/* Brand overrides */
+:root {
+  --brand-1: #FF8A00;
+  --brand-2: #FF3B30;
+  --brand-3: #FF00B8;
+  --grad: linear-gradient(90deg, #FF8A00, #FF3B30, #FF00B8);
+}
+.brand-logo-icon {
+  display: block;
+  border-radius: 22%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.brand-logo-icon.sm { width: 36px; height: 36px; }
+.brand-logo-icon.xs { width: 28px; height: 28px; }
+.brand-wordmark {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.topbar-brand { display: flex; align-items: center; gap: 8px; }
+.sidebar-brand { display: flex; align-items: center; gap: 12px; }
+.btn-follow {
+  background: linear-gradient(90deg, #FF8A00, #FF00B8) !important;
+  color: #fff !important;
+  border: none !important;
+}
