@@ -173,27 +173,309 @@ function applyBatchItem(i) {
   if (typeof showToast === 'function') showToast('Preenchido — cole a imagem e publique.');
 }
 
+/* ── IA: comentários com revisão ── */
+window.__rgAiComments = [];
+window.__rgAiCommentsPostId = null;
+
+function getNpcPoolForAI() {
+  const npcs = Object.entries((typeof state !== 'undefined' && state.npcProfiles) || {});
+  if (npcs.length) {
+    return npcs.map(([h, u]) => ({
+      handle: normalizeHandleLocal(h),
+      name: u.name || h
+    }));
+  }
+  return [
+    { handle: 'porto_wire', name: 'Porto Wire' },
+    { handle: 'nexo_pulse', name: 'Nexo Pulse' },
+    { handle: 'dock_cam', name: 'Dock Cam' },
+    { handle: 'subsolo_echo', name: 'Subsolo Echo' },
+    { handle: 'rua_livre', name: 'Rua Livre' }
+  ];
+}
+
 async function aiReplyComment(postId) {
+  // atalho antigo → abre o fluxo novo com 1 comentário
+  openAiCommentsReview(postId, 1);
+}
+
+async function openAiCommentsReview(postId, count = 3) {
+  if (typeof isUserAdmin === 'function' && !isUserAdmin()) {
+    if (typeof showToast === 'function') showToast('Só admin.', 'err');
+    return;
+  }
   const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
-  if (!post) return;
-  const handle = document.getElementById('comment-as-handle')?.value?.trim() || 'nina_riders';
-  const statusIdea = post.caption || '';
+  if (!post) {
+    if (typeof showToast === 'function') showToast('Post não encontrado.', 'err');
+    return;
+  }
+
+  window.__rgAiCommentsPostId = postId;
+  ensureAiCommentsModal();
+  const modal = document.getElementById('ai-comments-modal');
+  const list = document.getElementById('ai-comments-list');
+  const status = document.getElementById('ai-comments-status');
+  const meta = document.getElementById('ai-comments-meta');
+
+  if (meta) {
+    meta.innerHTML = `
+      <div class="aic-post-preview">
+        <strong>@${escapeHTMLSafe(post.handle)}</strong>
+        <span>${escapeHTMLSafe((post.caption || '').slice(0, 120))}${(post.caption || '').length > 120 ? '…' : ''}</span>
+      </div>`;
+  }
+  if (list) {
+    list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>Gemini gerando comentários…</p></div>`;
+  }
+  if (status) status.textContent = 'gemini-3.6-flash';
+  modal.classList.add('open');
+
+  const n = Math.max(1, Math.min(8, Number(count) || 3));
   try {
-    if (typeof showToast === 'function') showToast('IA respondendo…');
-    const prompt = `Responda em 1 comentário curto (max 120 chars) como @${handle} no post: "${statusIdea}".
-Português BR, tom in-world. Só o texto do comentário.`;
-    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
-    text = String(text || '').trim().replace(/^["']|["']$/g, '').slice(0, 240);
-    const input = document.getElementById('comment-input');
-    if (input) input.value = text;
-    if (typeof showToast === 'function') showToast('Reply pronto — publique.');
+    const drafts = await generateAiCommentDrafts(post, n);
+    window.__rgAiComments = drafts;
+    renderAiCommentsList();
+    if (status) status.textContent = drafts.length + ' rascunho(s) · revise antes de publicar';
   } catch (e) {
     console.error(e);
-    if (typeof showToast === 'function') showToast('Erro IA reply.', 'err');
+    if (list) {
+      list.innerHTML = `<div class="aic-empty"><p>Falha na IA.</p><p class="hint">${escapeHTMLSafe(e?.message || 'erro')}</p>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openAiCommentsReview('${postId}', ${n})">Tentar de novo</button></div>`;
+    }
+    if (status) status.textContent = 'erro';
+    if (typeof showToast === 'function') showToast('Erro na IA de comentários.', 'err');
+  }
+}
+
+async function generateAiCommentDrafts(post, count) {
+  const pool = getNpcPoolForAI();
+  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.max(count, 3));
+  const roster = shuffled.map(x => `@${x.handle} (${x.name})`).join(', ');
+
+  const prompt = `Você escreve comentários para a Rede Global, rede social in-world de RPG urbano/cyberpunk brasileiro.
+Poste de @${normalizeHandleLocal(post.handle)} (${post.name || post.handle}):
+"${(post.caption || '(sem legenda)').slice(0, 400)}"
+
+Gere EXATAMENTE ${count} comentários diferentes de contas da cidade.
+Use APENAS handles desta lista (ou invente handles realistas se precisar): ${roster}
+
+Regras:
+- Português brasileiro natural, tom de rede social
+- Cada comentário: máximo 140 caracteres
+- Variar tom: elogio, piada, rumor, pergunta, reação curta
+- Nada de meta (não fale de RPG, mestre, IA)
+- NÃO use aspas envolvendo o texto
+
+Responda SOMENTE com JSON array válido:
+[{"handle":"sem_arroba","name":"Nome","text":"comentário"}]`;
+
+  let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+  text = String(text || '').trim();
+  const a = text.indexOf('[');
+  const b = text.lastIndexOf(']');
+  if (a === -1 || b <= a) throw new Error('Resposta sem JSON');
+  let arr = JSON.parse(text.slice(a, b + 1));
+  if (!Array.isArray(arr) || !arr.length) throw new Error('JSON vazio');
+
+  return arr.slice(0, count).map((item, i) => {
+    const h = normalizeHandleLocal(item.handle || shuffled[i % shuffled.length].handle);
+    const fromPool = pool.find(p => p.handle === h) || shuffled[i % shuffled.length];
+    return {
+      id: 'd' + i + '_' + Date.now(),
+      handle: h,
+      name: item.name || fromPool.name || h,
+      text: String(item.text || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240),
+      keep: true
+    };
+  }).filter(d => d.text);
+}
+
+function escapeHTMLSafe(str) {
+  if (typeof escapeHTML === 'function') return escapeHTML(str);
+  return String(str || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function ensureAiCommentsModal() {
+  if (document.getElementById('ai-comments-modal')) return;
+  const d = document.createElement('div');
+  d.id = 'ai-comments-modal';
+  d.className = 'modal aic-modal';
+  d.onclick = (e) => { if (e.target === d) closeAiCommentsModal(); };
+  d.innerHTML = `
+    <div class="modal-sheet aic-sheet" onclick="event.stopPropagation()">
+      <div class="aic-head">
+        <div>
+          <h3>Comentários IA</h3>
+          <p class="aic-sub" id="ai-comments-status">gemini-3.6-flash</p>
+        </div>
+        <button type="button" class="icon-btn" onclick="closeAiCommentsModal()" title="Fechar">✕</button>
+      </div>
+      <div id="ai-comments-meta" class="aic-meta"></div>
+      <div class="aic-toolbar">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsRegenerate(3)">↻ 3 novos</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsRegenerate(5)">↻ 5 novos</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsSelectAll(true)">Marcar todos</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsSelectAll(false)">Desmarcar</button>
+      </div>
+      <div id="ai-comments-list" class="aic-list"></div>
+      <div class="aic-foot">
+        <button type="button" class="btn btn-ghost" onclick="closeAiCommentsModal()">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="ai-comments-publish" onclick="publishAiComments()">Publicar selecionados</button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+}
+
+function renderAiCommentsList() {
+  const list = document.getElementById('ai-comments-list');
+  if (!list) return;
+  const drafts = window.__rgAiComments || [];
+  const pool = getNpcPoolForAI();
+
+  if (!drafts.length) {
+    list.innerHTML = `<div class="aic-empty"><p>Nenhum rascunho.</p>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentsRegenerate(3)">Gerar</button></div>`;
+    return;
+  }
+
+  list.innerHTML = drafts.map((d, i) => `
+    <div class="aic-card ${d.keep ? '' : 'aic-card-off'}" data-idx="${i}">
+      <div class="aic-card-top">
+        <label class="aic-check">
+          <input type="checkbox" ${d.keep ? 'checked' : ''} onchange="aiCommentToggle(${i}, this.checked)"/>
+          <span>publicar</span>
+        </label>
+        <button type="button" class="icon-btn aic-trash" onclick="aiCommentRemove(${i})" title="Remover">🗑</button>
+      </div>
+      <div class="aic-card-who">
+        <select class="input input-sm aic-handle" onchange="aiCommentSetHandle(${i}, this.value)">
+          ${pool.map(p =>
+            `<option value="${escapeHTMLSafe(p.handle)}" ${p.handle === d.handle ? 'selected' : ''}>@${escapeHTMLSafe(p.handle)}</option>`
+          ).join('')}
+          ${pool.some(p => p.handle === d.handle) ? '' :
+            `<option value="${escapeHTMLSafe(d.handle)}" selected>@${escapeHTMLSafe(d.handle)}</option>`}
+        </select>
+        <input class="input input-sm aic-name" value="${escapeHTMLSafe(d.name)}" maxlength="40"
+          oninput="aiCommentSetName(${i}, this.value)" placeholder="Nome"/>
+      </div>
+      <textarea class="input aic-text" rows="2" maxlength="240"
+        oninput="aiCommentSetText(${i}, this.value)">${escapeHTMLSafe(d.text)}</textarea>
+      <div class="aic-card-foot">
+        <span class="aic-chars">${(d.text || '').length}/240</span>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentRegenOne(${i})">↻ este</button>
+      </div>
+    </div>`).join('');
+
+  const btn = document.getElementById('ai-comments-publish');
+  const n = drafts.filter(x => x.keep && (x.text || '').trim()).length;
+  if (btn) btn.textContent = n ? `Publicar ${n}` : 'Publicar selecionados';
+}
+
+function aiCommentToggle(i, on) {
+  if (!window.__rgAiComments[i]) return;
+  window.__rgAiComments[i].keep = !!on;
+  renderAiCommentsList();
+}
+function aiCommentRemove(i) {
+  window.__rgAiComments.splice(i, 1);
+  renderAiCommentsList();
+}
+function aiCommentSetHandle(i, handle) {
+  const d = window.__rgAiComments[i];
+  if (!d) return;
+  d.handle = normalizeHandleLocal(handle);
+  const pool = getNpcPoolForAI().find(p => p.handle === d.handle);
+  if (pool) d.name = pool.name;
+  renderAiCommentsList();
+}
+function aiCommentSetName(i, name) {
+  if (window.__rgAiComments[i]) window.__rgAiComments[i].name = name;
+}
+function aiCommentSetText(i, text) {
+  if (!window.__rgAiComments[i]) return;
+  window.__rgAiComments[i].text = text;
+  const card = document.querySelector(`.aic-card[data-idx="${i}"] .aic-chars`);
+  if (card) card.textContent = `${text.length}/240`;
+}
+function aiCommentsSelectAll(on) {
+  (window.__rgAiComments || []).forEach(d => { d.keep = !!on; });
+  renderAiCommentsList();
+}
+async function aiCommentsRegenerate(count) {
+  const postId = window.__rgAiCommentsPostId;
+  if (postId) openAiCommentsReview(postId, count);
+}
+async function aiCommentRegenOne(i) {
+  const postId = window.__rgAiCommentsPostId;
+  const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
+  const d = window.__rgAiComments[i];
+  if (!post || !d) return;
+  try {
+    if (typeof showToast === 'function') showToast('Regenerando…');
+    const prompt = `Escreva 1 comentário (max 140 chars) como @${d.handle} (${d.name}) no post de @${post.handle}: "${(post.caption || '').slice(0, 300)}".
+Português BR, rede social in-world, sem aspas. Só o texto.`;
+    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    d.text = String(text || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240);
+    renderAiCommentsList();
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('Falha ao regenerar.', 'err');
+  }
+}
+
+function closeAiCommentsModal() {
+  document.getElementById('ai-comments-modal')?.classList.remove('open');
+}
+
+async function publishAiComments() {
+  const postId = window.__rgAiCommentsPostId;
+  const selected = (window.__rgAiComments || []).filter(d => d.keep && (d.text || '').trim());
+  if (!postId || !selected.length) {
+    if (typeof showToast === 'function') showToast('Nenhum comentário selecionado.', 'err');
+    return;
+  }
+  const btn = document.getElementById('ai-comments-publish');
+  if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
+
+  try {
+    for (const d of selected) {
+      await db.ref('posts/' + postId + '/comments').push({
+        text: d.text.trim().slice(0, 240),
+        uid: 'npc_' + normalizeHandleLocal(d.handle),
+        handle: normalizeHandleLocal(d.handle),
+        name: d.name || d.handle,
+        createdAt: Date.now() - Math.floor(Math.random() * 20 * 60000),
+        bot: true,
+        ai: true
+      });
+    }
+    const snap = await db.ref('posts/' + postId + '/comments').once('value');
+    const n = snap.exists() ? Object.keys(snap.val()).length : 0;
+    await db.ref('posts/' + postId + '/commentCount').set(n);
+    if (typeof showToast === 'function') showToast(selected.length + ' comentário(s) publicados.');
+    closeAiCommentsModal();
+    if (typeof renderPostModal === 'function') renderPostModal(postId);
+  } catch (e) {
+    console.error(e);
+    if (typeof showToast === 'function') showToast('Erro ao publicar comentários.', 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Publicar selecionados'; }
   }
 }
 
 window.generateBatchCaptions = generateBatchCaptions;
 window.applyBatchItem = applyBatchItem;
 window.aiReplyComment = aiReplyComment;
+window.openAiCommentsReview = openAiCommentsReview;
+window.closeAiCommentsModal = closeAiCommentsModal;
+window.publishAiComments = publishAiComments;
+window.aiCommentsRegenerate = aiCommentsRegenerate;
+window.aiCommentsSelectAll = aiCommentsSelectAll;
+window.aiCommentToggle = aiCommentToggle;
+window.aiCommentRemove = aiCommentRemove;
+window.aiCommentSetHandle = aiCommentSetHandle;
+window.aiCommentSetName = aiCommentSetName;
+window.aiCommentSetText = aiCommentSetText;
+window.aiCommentRegenOne = aiCommentRegenOne;
 
