@@ -66,11 +66,12 @@ function normalizeHandleLocal(h) {
 
 async function generatePostWithAI() {
   const idea = document.getElementById("ai-idea")?.value.trim();
-  const handle = (document.getElementById("ai-handle")?.value || "").trim() || "porto_wire";
-  const npc = (typeof state !== "undefined" && state.npcProfiles)
-    ? state.npcProfiles[handle] || state.npcProfiles[(handle || "").toLowerCase()]
+  let handle = normalizeHandleLocal(document.getElementById("ai-handle")?.value || "");
+  const imagePrefill = (document.getElementById("ai-image")?.value || "").trim();
+  const npc = (typeof state !== "undefined" && state.npcProfiles && handle)
+    ? state.npcProfiles[handle] || state.npcProfiles[handle.toLowerCase()]
     : null;
-  const name = document.getElementById("ai-name")?.value.trim() || npc?.name || handle;
+  let name = document.getElementById("ai-name")?.value.trim() || npc?.name || handle || "";
   const status = document.getElementById("ai-status");
   const btn = document.getElementById("btn-ai-gen");
 
@@ -85,29 +86,62 @@ async function generatePostWithAI() {
   }
   if (status) status.textContent = "Firebase AI · gemini-3.6-flash…";
 
-  const prompt = `Você escreve legendas para a Rede Global, rede social in-world de RPG urbano/cyber.
-Gere UMA legenda de post estilo Instagram (máximo 280 caracteres) em português brasileiro.
-Tom: cidade viva, realista, pode usar 1 a 3 hashtags.
-NÃO envolva a resposta em aspas.
+  // se não escolheu NPC, deixa a IA sugerir handle+nome+legenda
+  const needIdentity = !handle;
+  const prompt = needIdentity
+    ? `Você é social media da Rede Global (rede social in-world de RPG urbano/cyber, PT-BR).
+Ideia do post: ${idea}
+
+Gere UM post Instagram. Responda SOMENTE JSON válido:
+{"handle":"sem_arroba","name":"Nome de exibição","caption":"legenda max 280 chars com 1-3 hashtags"}
+
+Regras: handle realista de mídia/marca/pessoa da cidade; legenda natural; sem aspas extras; sem meta de RPG.`
+    : `Você escreve legendas para a Rede Global, rede social in-world de RPG urbano/cyber.
+Gere UMA legenda estilo Instagram (máx 280 caracteres) em português brasileiro.
+Tom: cidade viva, realista, 1 a 3 hashtags. NÃO envolva em aspas.
 Ideia: ${idea}
-Conta: @${normalizeHandleLocal(handle)} (${name})
-Responda APENAS com a legenda.`;
+Conta: @${handle} (${name || handle})
+Responda SOMENTE JSON: {"caption":"texto da legenda"}`;
 
   try {
-    let text = await jetStyleGenerate(prompt, "gemini-3.6-flash");
-    text = String(text || "")
-      .trim()
-      .replace(/^["«]|["»]$/g, "");
-    if (!text) throw new Error("Resposta vazia");
+    let raw = await jetStyleGenerate(prompt, "gemini-3.6-flash");
+    raw = String(raw || "").trim();
+    let caption = "";
+    // tenta JSON
+    const j0 = raw.indexOf("{");
+    const j1 = raw.lastIndexOf("}");
+    if (j0 !== -1 && j1 > j0) {
+      try {
+        const obj = JSON.parse(raw.slice(j0, j1 + 1));
+        caption = String(obj.caption || obj.legenda || obj.text || "").trim();
+        if (needIdentity) {
+          if (obj.handle) handle = normalizeHandleLocal(obj.handle);
+          if (obj.name) name = String(obj.name).trim();
+        }
+      } catch (_) { /* fallback texto puro */ }
+    }
+    if (!caption) {
+      caption = raw.replace(/^["«]|["»]$/g, "").trim();
+    }
+    if (!caption) throw new Error("Resposta vazia");
+    if (!handle) handle = "porto_wire";
+    if (!name) {
+      const n = (typeof state !== "undefined" && state.npcProfiles)
+        ? state.npcProfiles[handle]
+        : null;
+      name = n?.name || handle;
+    }
 
-    const captionEl = document.getElementById("adm-caption");
-    const handleEl = document.getElementById("adm-handle");
-    const nameEl = document.getElementById("adm-name");
-    if (captionEl) captionEl.value = text.slice(0, 500);
-    if (handleEl) handleEl.value = normalizeHandleLocal(handle);
-    if (nameEl) nameEl.value = name;
-    if (status) status.textContent = "Legenda pronta — cole a URL da imagem e publique.";
-    if (typeof showToast === "function") showToast("Legenda gerada (gemini-3.6-flash).");
+    openAiPostReview({
+      handle,
+      name,
+      caption: caption.slice(0, 500),
+      image: imagePrefill,
+      idea
+    });
+
+    if (status) status.textContent = "Rascunho pronto — revise e publique.";
+    if (typeof showToast === "function") showToast("Post gerado — revise no modal.");
   } catch (e) {
     console.error(e);
     if (status) status.textContent = "Falha: " + (e?.message || "erro");
@@ -117,13 +151,147 @@ Responda APENAS com a legenda.`;
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "Gerar legenda";
+      btn.textContent = "Gerar post";
     }
+  }
+}
+
+/* Modal de revisão de post gerado por IA */
+function ensureAiPostModal() {
+  if (document.getElementById("ai-post-modal")) return;
+  const d = document.createElement("div");
+  d.id = "ai-post-modal";
+  d.className = "modal aic-modal";
+  d.onclick = (e) => { if (e.target === d) closeAiPostReview(); };
+  d.innerHTML = `
+    <div class="modal-sheet aic-sheet aip-sheet" onclick="event.stopPropagation()">
+      <div class="aic-head">
+        <div>
+          <h3>Revisar post IA</h3>
+          <p class="aic-sub" id="aip-status">gemini-3.6-flash</p>
+        </div>
+        <button type="button" class="icon-btn" onclick="closeAiPostReview()">✕</button>
+      </div>
+      <div class="aip-body">
+        <div class="aip-preview" id="aip-preview">
+          <span class="text-muted">URL da imagem</span>
+        </div>
+        <div class="aip-fields">
+          <label class="field"><span>Handle</span>
+            <input class="input" id="aip-handle" maxlength="24"/>
+          </label>
+          <label class="field"><span>Nome</span>
+            <input class="input" id="aip-name" maxlength="40"/>
+          </label>
+          <label class="field"><span>Imagem (URL)</span>
+            <input class="input" id="aip-image" type="url" placeholder="https://…" oninput="previewAiPostImage()"/>
+          </label>
+          <label class="field"><span>Legenda</span>
+            <textarea class="input" id="aip-caption" rows="5" maxlength="500"></textarea>
+          </label>
+          <p class="hint" id="aip-idea-hint"></p>
+        </div>
+      </div>
+      <div class="aic-foot">
+        <button type="button" class="btn btn-ghost" onclick="closeAiPostReview()">Cancelar</button>
+        <button type="button" class="btn btn-ghost" onclick="regenAiPostCaption()">↻ Regenerar legenda</button>
+        <button type="button" class="btn btn-primary" id="aip-publish" onclick="publishAiPostReview()">Publicar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+}
+
+function openAiPostReview(draft) {
+  ensureAiPostModal();
+  window.__rgAiPostDraft = draft || {};
+  document.getElementById("aip-handle").value = draft.handle || "";
+  document.getElementById("aip-name").value = draft.name || "";
+  document.getElementById("aip-image").value = draft.image || "";
+  document.getElementById("aip-caption").value = draft.caption || "";
+  const hint = document.getElementById("aip-idea-hint");
+  if (hint) hint.textContent = draft.idea ? "Ideia: " + draft.idea : "";
+  document.getElementById("aip-status").textContent = "Revise antes de publicar";
+  previewAiPostImage();
+  document.getElementById("ai-post-modal").classList.add("open");
+}
+
+function closeAiPostReview() {
+  document.getElementById("ai-post-modal")?.classList.remove("open");
+}
+
+function previewAiPostImage() {
+  const url = (document.getElementById("aip-image")?.value || "").trim();
+  const box = document.getElementById("aip-preview");
+  if (!box) return;
+  if (url) {
+    box.innerHTML = `<img src="${escapeHTMLSafe(url)}" alt="" onerror="this.parentElement.innerHTML='<span class=text-muted>Imagem inválida</span>'"/>`;
+  } else {
+    box.innerHTML = `<span class="text-muted">Cole a URL da imagem</span>`;
+  }
+}
+
+async function regenAiPostCaption() {
+  const handle = normalizeHandleLocal(document.getElementById("aip-handle")?.value);
+  const name = document.getElementById("aip-name")?.value.trim() || handle;
+  const idea = window.__rgAiPostDraft?.idea || document.getElementById("aip-caption")?.value || "";
+  const status = document.getElementById("aip-status");
+  if (status) status.textContent = "Regenerando…";
+  try {
+    const prompt = `Legenda Instagram (max 280 chars, PT-BR, 1-3 hashtags) para @${handle} (${name}).
+Ideia: ${idea}
+Só o texto da legenda, sem aspas.`;
+    let text = await jetStyleGenerate(prompt, "gemini-3.6-flash");
+    text = String(text || "").trim().replace(/^["«]|["»]$/g, "");
+    document.getElementById("aip-caption").value = text.slice(0, 500);
+    if (status) status.textContent = "Legenda regenerada";
+  } catch (e) {
+    if (status) status.textContent = "Falha ao regenerar";
+    if (typeof showToast === "function") showToast("Erro ao regenerar.", "err");
+  }
+}
+
+async function publishAiPostReview() {
+  const handle = normalizeHandleLocal(document.getElementById("aip-handle")?.value);
+  const name = document.getElementById("aip-name")?.value.trim() || handle;
+  const image = (document.getElementById("aip-image")?.value || "").trim();
+  const caption = (document.getElementById("aip-caption")?.value || "").trim();
+  if (!handle) {
+    if (typeof showToast === "function") showToast("Informe o handle.", "err");
+    return;
+  }
+  if (!image) {
+    if (typeof showToast === "function") showToast("Cole a URL da imagem.", "err");
+    return;
+  }
+  const btn = document.getElementById("aip-publish");
+  if (btn) { btn.disabled = true; btn.textContent = "Publicando…"; }
+  try {
+    const ok = await createPost({
+      image,
+      caption,
+      asHandle: handle,
+      asName: name
+    });
+    if (ok) {
+      if (typeof showToast === "function") showToast("Post no ar.");
+      closeAiPostReview();
+      if (typeof showView === "function") showView("feed");
+    }
+  } catch (e) {
+    console.error(e);
+    if (typeof showToast === "function") showToast("Erro ao publicar.", "err");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Publicar"; }
   }
 }
 
 window.generatePostWithAI = generatePostWithAI;
 window.jetStyleGenerate = jetStyleGenerate;
+window.openAiPostReview = openAiPostReview;
+window.closeAiPostReview = closeAiPostReview;
+window.previewAiPostImage = previewAiPostImage;
+window.regenAiPostCaption = regenAiPostCaption;
+window.publishAiPostReview = publishAiPostReview;
 
 async function generateBatchCaptions() {
   const idea = document.getElementById('ai-batch-idea')?.value.trim();

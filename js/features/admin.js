@@ -335,28 +335,33 @@ function renderAdminNpcs() {
 function renderAdminIA() {
   return `
     <section class="panel">
-      <h3>Gerar legenda</h3>
-      <p class="hint">Firebase AI · gemini-3.6-flash</p>
+      <h3>Gerar post com IA</h3>
+      <p class="hint">Firebase AI · gemini-3.6-flash · você revisa antes de publicar</p>
       <div class="form-group">
-        <label>NPC</label>
+        <label>NPC (opcional — vazio = IA sugere conta)</label>
         ${npcSelectHTML('ai-handle')}
       </div>
       <div class="form-group">
         <label>Nome (opcional)</label>
-        <input class="input" id="ai-name" placeholder="auto"/>
+        <input class="input" id="ai-name" placeholder="auto se deixar vazio"/>
+      </div>
+      <div class="form-group">
+        <label>Imagem URL (opcional — pode colar depois na revisão)</label>
+        <input class="input" id="ai-image" type="url" placeholder="https://…"/>
       </div>
       <div class="form-group">
         <label>Ideia</label>
-        <textarea class="input" id="ai-idea" rows="2" placeholder="Show no porto…"></textarea>
+        <textarea class="input" id="ai-idea" rows="3" placeholder="Ex: Nina Riders lançando coleção de néon no Setor Leste, tom de campanha streetwear…"></textarea>
       </div>
-      <button type="button" class="btn btn-primary" id="btn-ai-gen" onclick="generatePostWithAI()">Gerar legenda</button>
-      <p class="hint" id="ai-status"></p>
+      <button type="button" class="btn btn-primary" id="btn-ai-gen" onclick="generatePostWithAI()">✦ Gerar post</button>
+      <p class="hint" id="ai-status">A IA abre um modal pra você editar legenda, handle e imagem antes de postar.</p>
     </section>
     <section class="panel">
       <h3>Lote (3 legendas)</h3>
+      <p class="hint">Gera 3 ideias de post pra preencher o formulário de Publicar.</p>
       <div class="form-group">
         <label>Arco da sessão</label>
-        <textarea class="input" id="ai-batch-idea" rows="2"></textarea>
+        <textarea class="input" id="ai-batch-idea" rows="2" placeholder="Tensão no porto, drones, rumor de blackout…"></textarea>
       </div>
       <button type="button" class="btn btn-primary" onclick="generateBatchCaptions()">Gerar lote</button>
       <div id="ai-batch-out" class="hint" style="margin-top:10px;white-space:pre-wrap"></div>
