@@ -109,11 +109,10 @@ function getProfileBundle(handle) {
   if (userEntry) {
     const [uid, u] = userEntry;
     const isMe = !!(state.user && uid === state.user.uid);
-    // "seguindo" do player: conta real da lista following/
-    let followingN = Number(u.followingCount) || 0;
-    if (isMe) {
-      followingN = Object.keys(state.following || {}).length;
-    }
+    // seguindo = base fictícia (RP) + follows reais
+    let followingN = typeof displayFollowingCount === 'function'
+      ? displayFollowingCount(u, uid)
+      : (Number(u.followingCount) || 0);
     return {
       kind: 'user',
       uid,
@@ -123,6 +122,7 @@ function getProfileBundle(handle) {
       avatar: u.avatar || '',
       followers: Number(u.followersCount) || 0,
       following: followingN,
+      followingBase: Number(u.followingBase) || 0,
       isMe,
       verified: !!u.verified,
       suspended: !!u.suspended,

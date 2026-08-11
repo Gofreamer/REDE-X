@@ -576,7 +576,7 @@ async function toggleFollow(handle) {
   if (!state.user) return;
   const h = normalizeHandle(handle);
   if (!h) return;
-  // player só grava em following/{uid} (+ followingCount no próprio users/)
+  // player grava em following/{uid}; contador = base fictícia + follows reais
   const path = 'following/' + state.user.uid + '/' + h;
   try {
     if (isFollowing(h)) {
@@ -586,7 +586,6 @@ async function toggleFollow(handle) {
       await db.ref(path).set({ at: Date.now(), handle: h });
       showToast('Seguindo @' + h);
     }
-    // atualiza contador no perfil do player (ele pode escrever no próprio users/)
     await syncMyFollowingCount();
   } catch (e) {
     console.error('toggleFollow', e);
@@ -594,16 +593,66 @@ async function toggleFollow(handle) {
   }
 }
 
+/** Base RP (followingBase) + follows reais em following/{uid} */
+function realFollowingCount(uid) {
+  if (uid && state.user && uid === state.user.uid) {
+    return Object.keys(state.following || {}).length;
+  }
+  return 0;
+}
+
+function displayFollowingCount(userObj, uid) {
+  const base = Number(userObj?.followingBase);
+  const stored = Number(userObj?.followingCount) || 0;
+  // se não tem base, trata followingCount antigo como base quando não há follows reais
+  const baseN = !isNaN(base) ? Math.max(0, base) : 0;
+  if (uid && state.user && uid === state.user.uid) {
+    return baseN + Object.keys(state.following || {}).length;
+  }
+  // outros perfis: usa o total já sincronizado
+  return Math.max(stored, baseN);
+}
+
 async function syncMyFollowingCount() {
   if (!state.user) return;
   try {
-    const snap = await db.ref('following/' + state.user.uid).once('value');
-    const data = snap.val() || {};
-    const n = Object.keys(data).length;
-    await db.ref('users/' + state.user.uid + '/followingCount').set(n);
+    const uid = state.user.uid;
+    const [followSnap, userSnap] = await Promise.all([
+      db.ref('following/' + uid).once('value'),
+      db.ref('users/' + uid).once('value')
+    ]);
+    const real = Object.keys(followSnap.val() || {}).length;
+    const u = userSnap.val() || {};
+    let base = Number(u.followingBase);
+    // migração: se nunca teve followingBase, preserva o fictício que estava em followingCount
+    // (followingCount antigo podia ser só RP; não pode virar 0 ao seguir o 1º NPC)
+    if (isNaN(base)) {
+      const prev = Number(u.followingCount) || 0;
+      // base = o que sobra além dos follows reais já existentes
+      base = Math.max(0, prev - real);
+      // se prev era só reais (ex.: sync antigo zerou), base fica 0 — ok
+      await db.ref('users/' + uid + '/followingBase').set(base);
+    }
+    const total = Math.max(0, base) + real;
+    await db.ref('users/' + uid + '/followingCount').set(total);
   } catch (e) {
     console.warn('syncMyFollowingCount', e);
   }
+}
+
+/** Admin define o número fictício (base). Total exibido = base + follows reais. */
+async function setFollowingBase(uid, baseValue) {
+  if (!uid) return;
+  const base = Math.max(0, parseInt(baseValue, 10) || 0);
+  let real = 0;
+  try {
+    const snap = await db.ref('following/' + uid).once('value');
+    real = Object.keys(snap.val() || {}).length;
+  } catch (_) {}
+  await db.ref('users/' + uid).update({
+    followingBase: base,
+    followingCount: base + real
+  });
 }
 
 async function saveMediaUrl(url, label) {

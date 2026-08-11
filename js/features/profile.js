@@ -142,11 +142,11 @@ function renderProfile() {
               <label class="field"><span>Seguidores</span>
                 <input id="ep-followers" type="number" min="0" value="${bundle.followers}"/>
               </label>
-              <label class="field"><span>Seguindo</span>
-                <input id="ep-following" type="number" min="0" value="${bundle.following}"/>
+              <label class="field"><span>Seguindo (base RP)</span>
+                <input id="ep-following" type="number" min="0" value="${bundle.kind === 'user' ? (bundle.followingBase || 0) : bundle.following}"/>
               </label>
             </div>
-            <p class="hint">Numeros de RP — admin ou dono da conta.</p>
+            <p class="hint">Base RP de “seguindo”. Follows reais somam em cima (ex.: 30 + 1 NPC = 31).</p>
           ` : ''}
           ${isMe ? `
             <label class="field"><span>UID</span>
@@ -208,8 +208,16 @@ async function submitEditProfile(e) {
       }
       const data = { name, bio, avatar, updatedAt: Date.now() };
       if (!isNaN(followers)) data.followersCount = Math.max(0, followers);
-      if (!isNaN(following)) data.followingCount = Math.max(0, following);
       await db.ref('users/' + uid).update(data);
+      // base fictícia + follows reais (não zera o RP)
+      if (!isNaN(following) && typeof setFollowingBase === 'function') {
+        await setFollowingBase(uid, following);
+      } else if (!isNaN(following)) {
+        await db.ref('users/' + uid).update({
+          followingBase: Math.max(0, following),
+          followingCount: Math.max(0, following)
+        });
+      }
       if (handle) await db.ref('handles/' + handle).update({ name });
     } else {
       if (!isUserAdmin()) {
@@ -307,10 +315,16 @@ async function adminBoostProfile(handle) {
   const bundle = getProfileBundle(h);
   try {
     if (bundle.kind === 'user' && bundle.uid) {
-      await db.ref('users/' + bundle.uid).update({
-        followersCount: Math.max(0, followers || 0),
-        followingCount: Math.max(0, isNaN(following) ? 0 : following)
-      });
+      const payload = { followersCount: Math.max(0, followers || 0) };
+      await db.ref('users/' + bundle.uid).update(payload);
+      if (!isNaN(following) && typeof setFollowingBase === 'function') {
+        await setFollowingBase(bundle.uid, following);
+      } else if (!isNaN(following)) {
+        await db.ref('users/' + bundle.uid).update({
+          followingBase: Math.max(0, following),
+          followingCount: Math.max(0, following)
+        });
+      }
     } else {
       await db.ref('npcProfiles/' + h).update({
         followersCount: Math.max(0, followers || 0),
