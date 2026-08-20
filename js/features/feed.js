@@ -328,7 +328,7 @@ function renderPostModal(id) {
                 <label>Coments</label>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="openAiCommentsReview('${p.id}', 3)">✦ IA comentários</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openAiCommentsReview('${p.id}', 3, false)">✦ IA comentários</button>
               </div>
               <div class="apt-row">
                 <select id="comment-as-handle" class="input input-sm">

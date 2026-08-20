@@ -344,8 +344,10 @@ function applyBatchItem(i) {
 /* ── IA: comentários com revisão ── */
 window.__rgAiComments = [];
 window.__rgAiCommentsPostId = null;
+/** 'registered' = só NPCs cadastradas | 'random' = inventar contas novas */
+window.__rgAiNpcMode = 'random';
 
-function getNpcPoolForAI() {
+function getRegisteredNpcPool() {
   const npcs = Object.entries((typeof state !== 'undefined' && state.npcProfiles) || {});
   if (npcs.length) {
     return npcs.map(([h, u]) => ({
@@ -353,6 +355,10 @@ function getNpcPoolForAI() {
       name: u.name || h
     }));
   }
+  return [];
+}
+
+function getFallbackNpcPool() {
   return [
     { handle: 'porto_wire', name: 'Porto Wire' },
     { handle: 'nexo_pulse', name: 'Nexo Pulse' },
@@ -362,12 +368,47 @@ function getNpcPoolForAI() {
   ];
 }
 
-async function aiReplyComment(postId) {
-  // atalho antigo → abre o fluxo novo com 1 comentário
-  openAiCommentsReview(postId, 1);
+function getNpcPoolForAI() {
+  const mode = getAiNpcMode();
+  if (mode === 'registered') {
+    const reg = getRegisteredNpcPool();
+    return reg.length ? reg : getFallbackNpcPool();
+  }
+  // modo random: pool vazio — a IA inventa handles/nomes
+  return getRegisteredNpcPool().length ? getRegisteredNpcPool() : getFallbackNpcPool();
 }
 
-async function openAiCommentsReview(postId, count = 3, autoGenerate = true) {
+function getAiNpcMode() {
+  const el = document.getElementById('aic-npc-mode');
+  if (el && el.value) {
+    window.__rgAiNpcMode = el.value === 'registered' ? 'registered' : 'random';
+  }
+  return window.__rgAiNpcMode || 'random';
+}
+
+function setAiNpcMode(mode) {
+  const m = mode === 'registered' ? 'registered' : 'random';
+  window.__rgAiNpcMode = m;
+  const el = document.getElementById('aic-npc-mode');
+  if (el) el.value = m;
+  // atualiza chips visuais
+  document.querySelectorAll('.aic-npc-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === m);
+  });
+  const hint = document.getElementById('aic-npc-hint');
+  if (hint) {
+    hint.textContent = m === 'registered'
+      ? 'Só usa as NPCs que você já cadastrou no sistema. Nenhuma conta inventada.'
+      : 'A IA inventa handles e nomes novos da cidade. Suas NPCs cadastradas não entram.';
+  }
+}
+
+async function aiReplyComment(postId) {
+  // atalho antigo → abre o fluxo novo com 1 comentário (sem auto-gerar)
+  openAiCommentsReview(postId, 1, false);
+}
+
+async function openAiCommentsReview(postId, count = 3, autoGenerate = false) {
   if (typeof isUserAdmin === 'function' && !isUserAdmin()) {
     if (typeof showToast === 'function') showToast('Só admin.', 'err');
     return;
@@ -379,6 +420,7 @@ async function openAiCommentsReview(postId, count = 3, autoGenerate = true) {
   }
 
   window.__rgAiCommentsPostId = postId;
+  window.__rgAiComments = []; // limpa rascunhos anteriores
   ensureAiCommentsModal();
   const modal = document.getElementById('ai-comments-modal');
   const list = document.getElementById('ai-comments-list');
@@ -394,13 +436,15 @@ async function openAiCommentsReview(postId, count = 3, autoGenerate = true) {
       </div>`;
   }
   if (countEl) countEl.value = String(Math.max(1, Math.min(8, Number(count) || 3)));
-  if (status) status.textContent = 'defina o tom e gere';
+  if (status) status.textContent = 'defina o tom, o modo de NPC e toque em Gerar';
+  // sincroniza UI do modo NPC
+  setAiNpcMode(window.__rgAiNpcMode || 'random');
   modal.classList.add('open');
 
   if (autoGenerate) {
     await runAiCommentsGenerate();
-  } else if (list && !(window.__rgAiComments || []).length) {
-    list.innerHTML = `<div class="aic-empty"><p>Escolha o tom e toque em <strong>Gerar</strong>.</p></div>`;
+  } else if (list) {
+    list.innerHTML = `<div class="aic-empty"><p>Escolha o <strong>tom</strong> e o <strong>modo de NPC</strong>, depois toque em <strong>Gerar</strong>.</p></div>`;
   }
 }
 
@@ -424,14 +468,18 @@ async function runAiCommentsGenerate() {
   const countEl = document.getElementById('aic-count');
   const n = Math.max(1, Math.min(8, parseInt(countEl?.value, 10) || 3));
   const tone = getAiCommentsTone();
+  const mode = getAiNpcMode();
 
   if (list) {
     list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>Gemini gerando com o tom escolhido…</p></div>`;
   }
-  if (status) status.textContent = tone ? ('tom: ' + tone.slice(0, 40)) : 'gemini-3.6-flash';
+  if (status) {
+    const modeLabel = mode === 'registered' ? 'NPCs registradas' : 'NPCs aleatórias';
+    status.textContent = (tone ? ('tom: ' + tone.slice(0, 30) + ' · ') : '') + modeLabel;
+  }
 
   try {
-    const drafts = await generateAiCommentDrafts(post, n, tone);
+    const drafts = await generateAiCommentDrafts(post, n, tone, mode);
     window.__rgAiComments = drafts;
     renderAiCommentsList();
     if (status) status.textContent = drafts.length + ' rascunho(s) · revise antes de publicar';
@@ -446,13 +494,33 @@ async function runAiCommentsGenerate() {
   }
 }
 
-async function generateAiCommentDrafts(post, count, tone) {
-  const pool = getNpcPoolForAI();
-  const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.max(count, 3));
-  const roster = shuffled.map(x => `@${x.handle} (${x.name})`).join(', ');
+async function generateAiCommentDrafts(post, count, tone, mode) {
+  mode = mode || getAiNpcMode();
+  const registered = getRegisteredNpcPool();
+  const fallback = getFallbackNpcPool();
+  const pool = registered.length ? registered : fallback;
+
   const toneLine = (tone || '').trim()
     ? `TOM PEDIDO PELO MESTRE (prioridade máxima): ${tone.trim()}`
     : `Tom padrão: português BR de cidade, informal, seco, às vezes irônico; evitar "amei/parabéns/incrível".`;
+
+  let accountRules;
+  let shuffled = [];
+
+  if (mode === 'registered') {
+    shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.max(count, 3));
+    const roster = shuffled.map(x => `@${x.handle} (${x.name})`).join(', ');
+    accountRules = `USE SOMENTE handles desta lista de NPCs registradas (não invente contas novas):
+${roster}
+Cada comentário deve vir de uma conta DIFERENTE da lista.`;
+  } else {
+    // random: IA inventa handles/nomes de gente da cidade
+    accountRules = `INVENTAR contas novas (handles e nomes) que soem como gente real da cidade (cyberpunk/urbano BR: porto, rua, subsolo, marca underground).
+NÃO use as NPCs já cadastradas do sistema.
+Exemplos de estilo de handle (só inspiração, invente outros): @sombra_dock, @linha_norte, @eco_rua, @void_porto, @pixel_leste
+Handles em minúsculas, sem espaços, com _ se precisar. Nomes curtos e naturais.
+Cada comentário de uma conta DIFERENTE.`;
+  }
 
   const prompt = `Você escreve comentários na Rede Global — rede social da cidade (cyberpunk/urbano brasileiro).
 NÃO é Instagram genérico: é gente da rua, do porto, do setor, de marca underground.
@@ -461,7 +529,8 @@ Post de @${normalizeHandleLocal(post.handle)} (${post.name || post.handle}):
 "${(post.caption || '(sem legenda)').slice(0, 400)}"
 
 Gere EXATAMENTE ${count} comentários de contas diferentes.
-Preferir handles desta lista: ${roster}
+
+${accountRules}
 
 ${toneLine}
 
@@ -484,12 +553,26 @@ JSON only:
   if (!Array.isArray(arr) || !arr.length) throw new Error('JSON vazio');
 
   return arr.slice(0, count).map((item, i) => {
-    const h = normalizeHandleLocal(item.handle || shuffled[i % shuffled.length].handle);
-    const fromPool = pool.find(p => p.handle === h) || shuffled[i % shuffled.length];
+    let h = normalizeHandleLocal(item.handle || '');
+    let name = String(item.name || '').trim();
+
+    if (mode === 'registered') {
+      // força handle do pool se a IA inventou algo fora
+      const fromPool = pool.find(p => p.handle === h)
+        || shuffled[i % Math.max(shuffled.length, 1)]
+        || pool[i % pool.length];
+      h = fromPool.handle;
+      name = name || fromPool.name || h;
+    } else {
+      // random: aceita handle inventado; se vazio, gera um placeholder
+      if (!h) h = 'cidadao_' + (i + 1) + '_' + Math.floor(Math.random() * 900 + 100);
+      if (!name) name = h.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
     return {
       id: 'd' + i + '_' + Date.now(),
       handle: h,
-      name: item.name || fromPool.name || h,
+      name: name || h,
       text: String(item.text || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240),
       keep: true
     };
@@ -514,12 +597,21 @@ function ensureAiCommentsModal() {
       <div class="aic-head">
         <div>
           <h3>Comentários IA</h3>
-          <p class="aic-sub" id="ai-comments-status">gemini-3.6-flash</p>
+          <p class="aic-sub" id="ai-comments-status">defina o tom e gere</p>
         </div>
         <button type="button" class="icon-btn" onclick="closeAiCommentsModal()" title="Fechar">✕</button>
       </div>
       <div id="ai-comments-meta" class="aic-meta"></div>
       <div class="aic-tone-block">
+        <label class="aic-tone-label">Contas (NPC) <span>(quem comenta)</span></label>
+        <div class="aic-npc-mode-row">
+          <input type="hidden" id="aic-npc-mode" value="random"/>
+          <button type="button" class="aic-chip aic-npc-chip active" data-mode="random"
+            onclick="setAiNpcMode('random')">Aleatórias / inventadas</button>
+          <button type="button" class="aic-chip aic-npc-chip" data-mode="registered"
+            onclick="setAiNpcMode('registered')">NPCs registradas</button>
+        </div>
+        <p class="aic-npc-hint" id="aic-npc-hint">A IA inventa handles e nomes novos da cidade. Suas NPCs cadastradas não entram.</p>
         <label class="aic-tone-label">Tom / instrução <span>(a IA segue isso na geração)</span></label>
         <textarea class="input aic-tone-input" id="aic-tone" rows="2" placeholder="Ex: fãs empolgados da marca · imprensa fria · rumor hostil do subsolo · zoação leve entre amigos…"></textarea>
         <div class="aic-tone-chips">
@@ -554,7 +646,11 @@ function renderAiCommentsList() {
   const list = document.getElementById('ai-comments-list');
   if (!list) return;
   const drafts = window.__rgAiComments || [];
-  const pool = getNpcPoolForAI();
+  const mode = getAiNpcMode();
+  const regPool = (() => {
+    const r = getRegisteredNpcPool();
+    return r.length ? r : getFallbackNpcPool();
+  })();
 
   if (!drafts.length) {
     list.innerHTML = `<div class="aic-empty"><p>Nenhum rascunho.</p>
@@ -562,7 +658,21 @@ function renderAiCommentsList() {
     return;
   }
 
-  list.innerHTML = drafts.map((d, i) => `
+  list.innerHTML = drafts.map((d, i) => {
+    let whoControl;
+    if (mode === 'registered') {
+      whoControl = `<select class="input input-sm aic-handle" onchange="aiCommentSetHandle(${i}, this.value)">
+          ${regPool.map(p =>
+            `<option value="${escapeHTMLSafe(p.handle)}" ${p.handle === d.handle ? 'selected' : ''}>@${escapeHTMLSafe(p.handle)}</option>`
+          ).join('')}
+          ${regPool.some(p => p.handle === d.handle) ? '' :
+            `<option value="${escapeHTMLSafe(d.handle)}" selected>@${escapeHTMLSafe(d.handle)}</option>`}
+        </select>`;
+    } else {
+      whoControl = `<input class="input input-sm aic-handle" value="${escapeHTMLSafe(d.handle)}" maxlength="30"
+          onchange="aiCommentSetHandle(${i}, this.value)" placeholder="handle"/>`;
+    }
+    return `
     <div class="aic-card ${d.keep ? '' : 'aic-card-off'}" data-idx="${i}">
       <div class="aic-card-top">
         <label class="aic-check">
@@ -572,13 +682,7 @@ function renderAiCommentsList() {
         <button type="button" class="icon-btn aic-trash" onclick="aiCommentRemove(${i})" title="Remover">🗑</button>
       </div>
       <div class="aic-card-who">
-        <select class="input input-sm aic-handle" onchange="aiCommentSetHandle(${i}, this.value)">
-          ${pool.map(p =>
-            `<option value="${escapeHTMLSafe(p.handle)}" ${p.handle === d.handle ? 'selected' : ''}>@${escapeHTMLSafe(p.handle)}</option>`
-          ).join('')}
-          ${pool.some(p => p.handle === d.handle) ? '' :
-            `<option value="${escapeHTMLSafe(d.handle)}" selected>@${escapeHTMLSafe(d.handle)}</option>`}
-        </select>
+        ${whoControl}
         <input class="input input-sm aic-name" value="${escapeHTMLSafe(d.name)}" maxlength="40"
           oninput="aiCommentSetName(${i}, this.value)" placeholder="Nome"/>
       </div>
@@ -588,7 +692,8 @@ function renderAiCommentsList() {
         <span class="aic-chars">${(d.text || '').length}/240</span>
         <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentRegenOne(${i})">↻ este</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const btn = document.getElementById('ai-comments-publish');
   const n = drafts.filter(x => x.keep && (x.text || '').trim()).length;
@@ -608,8 +713,11 @@ function aiCommentSetHandle(i, handle) {
   const d = window.__rgAiComments[i];
   if (!d) return;
   d.handle = normalizeHandleLocal(handle);
-  const pool = getNpcPoolForAI().find(p => p.handle === d.handle);
-  if (pool) d.name = pool.name;
+  if (getAiNpcMode() === 'registered') {
+    const pool = getRegisteredNpcPool().find(p => p.handle === d.handle)
+      || getFallbackNpcPool().find(p => p.handle === d.handle);
+    if (pool) d.name = pool.name;
+  }
   renderAiCommentsList();
 }
 function aiCommentSetName(i, name) {
@@ -718,6 +826,8 @@ window.openAiCommentsReview = openAiCommentsReview;
 window.runAiCommentsGenerate = runAiCommentsGenerate;
 window.setAiCommentsTone = setAiCommentsTone;
 window.getAiCommentsTone = getAiCommentsTone;
+window.setAiNpcMode = setAiNpcMode;
+window.getAiNpcMode = getAiNpcMode;
 window.closeAiCommentsModal = closeAiCommentsModal;
 window.publishAiComments = publishAiComments;
 window.aiCommentsRegenerate = aiCommentsRegenerate;

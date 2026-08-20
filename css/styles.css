@@ -2350,6 +2350,23 @@ body.post-modal-open {
 .aic-count {
   width: 64px;
 }
+.aic-npc-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.aic-npc-chip.active {
+  color: var(--text);
+  border-color: var(--accent, #7c5cff);
+  background: color-mix(in srgb, var(--accent, #7c5cff) 18%, transparent);
+}
+.aic-npc-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0 0 12px;
+  line-height: 1.35;
+}
 
 /* Instagram-style comments */
 .avatar.xs { width: 28px; height: 28px; font-size: 0.75rem; flex-shrink: 0; }
