@@ -3,7 +3,26 @@ function openCompose() {
   const m = document.getElementById('compose-modal');
   if (!m) return;
   m.classList.add('open');
+  // garante campos admin visíveis se for admin
+  document.querySelectorAll('#compose-modal .admin-only').forEach(el => {
+    el.classList.toggle('hidden', !isUserAdmin());
+  });
   document.getElementById('compose-caption')?.focus();
+}
+
+/** Abre o compose já como um NPC (atalho a partir do perfil). */
+function openComposeAsNpc(handle, name) {
+  if (!isUserAdmin()) return;
+  const h = normalizeHandle(handle || '');
+  const n = name || ((state.npcProfiles || {})[h]?.name) || h;
+  openCompose();
+  setTimeout(() => {
+    const asEl = document.getElementById('compose-as');
+    const nameEl = document.getElementById('compose-as-name');
+    if (asEl) asEl.value = h;
+    if (nameEl) nameEl.value = n;
+    document.getElementById('compose-image')?.focus();
+  }, 40);
 }
 
 function closeCompose() {

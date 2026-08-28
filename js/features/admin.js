@@ -243,14 +243,34 @@ function renderAdminPublicar() {
     </section>`;
 }
 
+/**
+ * Atalho "Postar como" — funciona no Admin e no perfil do NPC.
+ * Se estiver na view Admin, preenche o formulário da mesa.
+ * Caso contrário, abre o compose já com handle/nome do NPC.
+ */
 function quickFillNpc(handle) {
-  adminTab = 'publicar';
-  renderAdmin();
-  setTimeout(() => {
-    const sel = document.getElementById('adm-handle');
-    if (sel) sel.value = handle;
-    document.getElementById('adm-caption')?.focus();
-  }, 30);
+  const h = normalizeHandle(handle || '');
+  if (!h) return;
+  const npc = (state.npcProfiles || {})[h] || {};
+  const name = npc.name || h;
+
+  // Caminho Admin: se a view admin está ativa, preenche o form da aba Publicar
+  if (state.currentView === 'admin') {
+    adminTab = 'publicar';
+    renderAdmin();
+    setTimeout(() => {
+      const sel = document.getElementById('adm-handle');
+      if (sel) {
+        sel.value = h;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      document.getElementById('adm-caption')?.focus();
+    }, 40);
+    return;
+  }
+
+  // Caminho atalho: abre compose com NPC pré-preenchido
+  openComposeAsNpc(h, name);
 }
 
 function renderAdminNpcs() {

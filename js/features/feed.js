@@ -234,6 +234,7 @@ function renderCommentBlock(c, postId, byParent, depth = 0) {
   const replies = byParent[c.id] || [];
   const replyTo = state.replyTo;
   const isActive = replyTo && replyTo.id === c.id;
+  const canDelete = isUserAdmin() || (state.user && c.uid === state.user.uid);
   return `
     <div class="ig-comment ${depth ? 'ig-comment-reply' : ''}" data-cid="${c.id}">
       <div class="ig-comment-body">
@@ -247,6 +248,7 @@ function renderCommentBlock(c, postId, byParent, depth = 0) {
             <span class="c-time" data-ts="${c.createdAt || ''}">${timeAgo(c.createdAt)}</span>
             <button type="button" class="ig-comment-reply-btn ${isActive ? 'active' : ''}"
               onclick="startReply('${postId}','${c.id}','${escapeHTML(normalizeHandle(c.handle))}')">Responder</button>
+            ${canDelete ? `<button type="button" class="ig-comment-delete-btn" onclick="deleteComment('${postId}','${c.id}')" title="Apagar comentário">Apagar</button>` : ''}
           </div>
         </div>
       </div>
@@ -316,34 +318,15 @@ function renderPostModal(id) {
             <span class="ig-likes">${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)} curtidas</span>
           </div>
           ${isUserAdmin() ? `
-            <div class="admin-post-tools" id="admin-post-tools">
-              <div class="apt-title">Controles da mesa</div>
-              <div class="apt-row">
-                <label>Likes</label>
-                <input type="number" id="adm-like-count" class="input input-sm" min="0" step="1" value="${p.likeCount || 0}" style="width:120px"/>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminSetLikes('${p.id}')">Aplicar</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateLikes('${p.id}')">+ auto</button>
-              </div>
-              <div class="apt-row">
-                <label>Coments</label>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="openAiCommentsReview('${p.id}', 3, false)">✦ IA comentários</button>
-              </div>
-              <div class="apt-row">
-                <select id="comment-as-handle" class="input input-sm">
-                  <option value="">comentar como eu</option>
-                  ${Object.keys(state.npcProfiles || {}).map(h =>
-                    `<option value="${escapeHTML(h)}">@${escapeHTML(h)}</option>`
-                  ).join('')}
-                </select>
-              </div>
-              <div class="apt-row">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}')">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="setSessionMode({ postId: '${p.id}', label: 'Sessão' })">Sessão</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="adminOpenTimeEditor('${p.id}')">Horário</button>
-                <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deletePost('${p.id}')">Apagar</button>
-              </div>
+            <div class="admin-post-bar">
+              <select id="comment-as-handle" class="input input-sm comment-as-select" title="Comentar como"
+                onchange="setCommentAsHandle(this.value)">
+                <option value="">comentar como eu</option>
+                ${Object.keys(state.npcProfiles || {}).map(h =>
+                  `<option value="${escapeHTML(h)}" ${state.commentAsHandle === h ? 'selected' : ''}>@${escapeHTML(h)}</option>`
+                ).join('')}
+              </select>
+              <button type="button" class="btn btn-ghost btn-sm mesa-controls-btn" onclick="openMesaControlsModal('${p.id}')">Controles da mesa</button>
             </div>
           ` : ''}
           ${replyTo ? `
@@ -388,8 +371,12 @@ async function submitComment(e, postId) {
   e.preventDefault();
   const input = document.getElementById('comment-input');
   const text = input?.value || '';
-  const asH = document.getElementById('comment-as-handle')?.value?.trim();
-  const asNpc = asH && isUserAdmin() ? { handle: asH, name: asH } : null;
+  const asH = (document.getElementById('comment-as-handle')?.value || state.commentAsHandle || '').trim();
+  let asNpc = null;
+  if (asH && isUserAdmin()) {
+    const npc = (state.npcProfiles || {})[normalizeHandle(asH)];
+    asNpc = { handle: asH, name: npc?.name || asH, avatar: npc?.avatar || '' };
+  }
   const replyTo = state.replyTo && state.replyTo.postId === postId ? state.replyTo : null;
   const ok = await addComment(postId, text, asNpc, replyTo);
   if (ok) {
@@ -708,5 +695,112 @@ async function adminPreviewComments(postId, count = 3) {
     showToast(count + ' comentários publicados.');
   } catch (e) {
     showToast('Erro.', 'err');
+  }
+}
+
+
+/* —— Modal Controles da mesa —— */
+function openMesaControlsModal(postId) {
+  if (!isUserAdmin()) return;
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  ensureMesaControlsModal();
+  const body = document.getElementById('mesa-controls-body');
+  if (!body) return;
+
+  const selectedAs = state.commentAsHandle || document.getElementById('comment-as-handle')?.value || '';
+
+  body.innerHTML = `
+    <div class="mesa-tools">
+      <div class="apt-row">
+        <label>Likes</label>
+        <input type="number" id="adm-like-count" class="input input-sm" min="0" step="1" value="${p.likeCount || 0}" style="width:120px"/>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminSetLikes('${p.id}')">Aplicar</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateLikes('${p.id}')">+ auto</button>
+      </div>
+      <div class="apt-row">
+        <label>Coments</label>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAiCommentsReview('${p.id}', 3, false); closeMesaControlsModal()">✦ IA comentários</button>
+      </div>
+      <div class="apt-row">
+        <label>Como</label>
+        <select id="mesa-comment-as" class="input input-sm" onchange="setCommentAsHandle(this.value)">
+          <option value="">comentar como eu</option>
+          ${Object.keys(state.npcProfiles || {}).map(h =>
+            `<option value="${escapeHTML(h)}" ${selectedAs === h ? 'selected' : ''}>@${escapeHTML(h)}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="apt-row">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}'); closeMesaControlsModal()">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="setSessionMode({ postId: '${p.id}', label: 'Sessão' }); closeMesaControlsModal()">Sessão</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="adminOpenTimeEditor('${p.id}')">Horário</button>
+        <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deletePost('${p.id}'); closeMesaControlsModal()">Apagar post</button>
+      </div>
+    </div>`;
+
+  document.getElementById('mesa-controls-modal')?.classList.add('open');
+}
+
+function closeMesaControlsModal() {
+  document.getElementById('mesa-controls-modal')?.classList.remove('open');
+}
+
+function setCommentAsHandle(handle) {
+  state.commentAsHandle = handle || '';
+  const sel = document.getElementById('comment-as-handle');
+  if (sel) sel.value = state.commentAsHandle;
+}
+
+function ensureMesaControlsModal() {
+  if (document.getElementById('mesa-controls-modal')) return;
+  const d = document.createElement('div');
+  d.id = 'mesa-controls-modal';
+  d.className = 'modal ig-dialog';
+  d.innerHTML = `
+    <div class="ig-dialog-card mesa-controls-card" onclick="event.stopPropagation()">
+      <div class="ig-dialog-title">Controles da mesa</div>
+      <div class="ig-dialog-body" id="mesa-controls-body"></div>
+      <div class="ig-dialog-actions">
+        <button type="button" class="ig-dialog-btn" onclick="closeMesaControlsModal()">Fechar</button>
+      </div>
+    </div>`;
+  d.addEventListener('click', e => { if (e.target === d) closeMesaControlsModal(); });
+  document.body.appendChild(d);
+}
+
+async function deleteComment(postId, commentId) {
+  if (!state.user) return;
+  const post = state.posts.find(p => p.id === postId);
+  if (!post) return;
+  const comment = (post.comments || {})[commentId];
+  if (!comment) return;
+
+  const isOwner = comment.uid === state.user.uid;
+  if (!isUserAdmin() && !isOwner) {
+    showToast('Sem permissão.', 'err');
+    return;
+  }
+
+  const ok = await rgConfirm({
+    title: 'Apagar comentário',
+    body: 'Remover este comentário' + (comment.handle ? ' de <strong>@' + escapeHTML(comment.handle) + '</strong>' : '') + '?',
+    confirmLabel: 'Apagar',
+    danger: true
+  });
+  if (!ok) return;
+
+  try {
+    await db.ref('posts/' + postId + '/comments/' + commentId).remove();
+    // recalcula count a partir do que restou (evita drift)
+    const snap = await db.ref('posts/' + postId + '/comments').once('value');
+    const n = snap.exists() ? Object.keys(snap.val() || {}).length : 0;
+    await db.ref('posts/' + postId + '/commentCount').set(n);
+    showToast('Comentário removido.');
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao apagar comentário.', 'err');
   }
 }

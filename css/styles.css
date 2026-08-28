@@ -2453,3 +2453,46 @@ body.post-modal-open {
 .comment-form .input:focus {
   outline: none;
 }
+
+/* —— Admin post bar (compact) + mesa controls modal —— */
+.admin-post-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  padding: 0 2px;
+}
+.admin-post-bar .comment-as-select {
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+.mesa-controls-btn {
+  white-space: nowrap;
+}
+.mesa-controls-card {
+  max-width: 420px;
+}
+.mesa-tools .apt-row {
+  margin-bottom: 10px;
+}
+.mesa-tools .apt-row:last-child {
+  margin-bottom: 0;
+}
+
+/* Apagar comentário */
+.ig-comment-delete-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #ed4956;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.ig-comment-delete-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
