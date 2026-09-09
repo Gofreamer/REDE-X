@@ -113,9 +113,20 @@ async function createPost({ caption, image, asHandle, asName, publishAt }) {
 
   try {
     const ref = await db.ref('posts').push(post);
+    // Índice leve por autor (histórico de perfil, fora da janela do feed)
+    try {
+      await indexPostByAuthor(ref.key, post);
+    } catch (idxErr) {
+      console.warn('postsByAuthor index', idxErr);
+    }
     await notifyMentions(text, ref.key, handle);
     if (isUserAdmin() && img) {
       try { await saveMediaUrl(img, handle); } catch (_) {}
+    }
+    // se o perfil desse autor estiver aberto, recarrega a grade
+    if (state.currentView === 'profile' && state.viewProfileHandle
+      && normalizeHandle(state.viewProfileHandle) === normalizeHandle(handle)) {
+      loadProfilePosts(normalizeHandle(handle), true).catch(() => {});
     }
     return true;
   } catch (e) {
@@ -126,8 +137,14 @@ async function createPost({ caption, image, asHandle, asName, publishAt }) {
 }
 
 async function deletePost(id) {
-  const post = state.posts.find(p => p.id === id);
-  if (!post) return;
+  let post = getPostFromMemory(id);
+  if (!post) {
+    post = await fetchPostById(id);
+  }
+  if (!post) {
+    showToast('Post não encontrado.', 'err');
+    return;
+  }
   if (post.uid !== state.user?.uid && !isUserAdmin()) {
     showToast('Sem permissão.', 'err');
     return;
@@ -135,26 +152,49 @@ async function deletePost(id) {
   const ok = await rgConfirm({ title: 'Apagar post', body: 'Remover esta publicação?', confirmLabel: 'Apagar', danger: true });
   if (!ok) return;
   try {
-    await db.ref('posts/' + id).remove();
+    const authorKey = authorKeyFromPost(post);
+    const updates = {};
+    updates['posts/' + id] = null;
+    if (authorKey) updates['postsByAuthor/' + authorKey + '/' + id] = null;
+    await db.ref().update(updates);
+    // limpa caches locais
+    if (state.postCache && state.postCache[id]) delete state.postCache[id];
+    if (state.profilePosts && Array.isArray(state.profilePosts.items)) {
+      state.profilePosts.items = state.profilePosts.items.filter(p => p.id !== id);
+      if (typeof state.profilePosts.count === 'number' && state.profilePosts.count > 0) {
+        state.profilePosts.count -= 1;
+      }
+    }
     if (state.activePost === id) closePostModal();
+    if (state.currentView === 'profile') renderProfile();
     showToast('Removido.');
   } catch (e) {
+    console.error(e);
     showToast('Erro ao apagar.', 'err');
   }
 }
 
 async function toggleLike(postId) {
   if (!state.user) return;
-  const post = state.posts.find(p => p.id === postId);
+  let post = typeof getPostFromMemory === 'function' ? getPostFromMemory(postId) : (state.posts || []).find(p => p.id === postId);
+  if (!post && typeof fetchPostById === 'function') post = await fetchPostById(postId);
   if (!post) return;
   const liked = !!(post.likes && post.likes[state.user.uid]);
   try {
     if (liked) {
       await db.ref(`posts/${postId}/likes/${state.user.uid}`).remove();
-      await db.ref(`posts/${postId}/likeCount`).set(Math.max(0, (post.likeCount || 0) - 1));
+      const next = Math.max(0, (post.likeCount || 0) - 1);
+      await db.ref(`posts/${postId}/likeCount`).set(next);
+      if (!post.likes) post.likes = {};
+      delete post.likes[state.user.uid];
+      post.likeCount = next;
     } else {
       await db.ref(`posts/${postId}/likes/${state.user.uid}`).set(Date.now());
-      await db.ref(`posts/${postId}/likeCount`).set((post.likeCount || 0) + 1);
+      const next = (post.likeCount || 0) + 1;
+      await db.ref(`posts/${postId}/likeCount`).set(next);
+      if (!post.likes) post.likes = {};
+      post.likes[state.user.uid] = Date.now();
+      post.likeCount = next;
       if (post.uid && post.uid !== state.user.uid && !String(post.uid).startsWith('npc_')) {
         await pushNotification(post.uid, {
           type: 'like',
@@ -163,6 +203,9 @@ async function toggleLike(postId) {
         });
       }
     }
+    if (typeof cachePost === 'function') cachePost(post);
+    if (state.activePost === postId && typeof renderPostModal === 'function') renderPostModal(postId);
+    if (state.currentView === 'feed' && typeof renderFeed === 'function') renderFeed();
   } catch (e) {
     showToast('Erro no like.', 'err');
   }
@@ -227,9 +270,18 @@ async function addComment(postId, text, asNpc, replyTo = null) {
     const commentRef = db.ref('posts/' + postId + '/comments').push();
     await commentRef.set(c);
     try {
-      const post = state.posts.find(p => p.id === postId);
+      let post = typeof getPostFromMemory === 'function' ? getPostFromMemory(postId) : (state.posts || []).find(p => p.id === postId);
+      if (!post && typeof fetchPostById === 'function') post = await fetchPostById(postId);
       const next = (post?.commentCount || 0) + 1;
       await db.ref('posts/' + postId + '/commentCount').set(next);
+      // atualiza cache local (posts fora da janela do feed não recebem o listener)
+      if (post) {
+        if (!post.comments) post.comments = {};
+        post.comments[commentRef.key] = c;
+        post.commentCount = next;
+        if (typeof cachePost === 'function') cachePost(post);
+        if (state.activePost === postId && typeof renderPostModal === 'function') renderPostModal(postId);
+      }
 
       // 1) dono do post (player real)
       if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
@@ -334,7 +386,8 @@ async function createStory({ image, asHandle, asName }) {
 
 async function togglePin(postId) {
   if (!isUserAdmin()) return;
-  const post = state.posts.find(p => p.id === postId);
+  let post = typeof getPostFromMemory === 'function' ? getPostFromMemory(postId) : (state.posts || []).find(p => p.id === postId);
+  if (!post && typeof fetchPostById === 'function') post = await fetchPostById(postId);
   if (!post) return;
   try {
     await db.ref(`posts/${postId}/pinned`).set(!post.pinned);
@@ -831,4 +884,239 @@ function isVerifiedProfile(handle) {
   if (userEntry) return !!(userEntry[1].verified);
   const npc = (state.npcProfiles || {})[h];
   return !!(npc && npc.verified);
+}
+
+
+/* ── postsByAuthor index (histórico de perfil) ── */
+
+const PROFILE_PAGE_SIZE = 30;
+
+function authorKeyFromPost(post) {
+  if (!post) return null;
+  if (post.uid) return String(post.uid);
+  if (post.handle) return 'npc_' + normalizeHandle(post.handle);
+  return null;
+}
+
+function authorKeyFromHandle(handle) {
+  const h = normalizeHandle(handle);
+  if (!h) return null;
+  const userEntry = Object.entries(state.profiles || {}).find(([, u]) => normalizeHandle(u.handle) === h);
+  if (userEntry) return userEntry[0];
+  return 'npc_' + h;
+}
+
+async function indexPostByAuthor(postId, post) {
+  const key = authorKeyFromPost(post);
+  if (!key || !postId) return;
+  const ts = Number(post.createdAt) || Date.now();
+  await db.ref('postsByAuthor/' + key + '/' + postId).set(ts);
+}
+
+function getPostFromMemory(id) {
+  if (!id) return null;
+  const fromFeed = (state.posts || []).find(p => p.id === id);
+  if (fromFeed) return fromFeed;
+  const fromProfile = (state.profilePosts && state.profilePosts.items || []).find(p => p.id === id);
+  if (fromProfile) return fromProfile;
+  if (state.postCache && state.postCache[id]) return state.postCache[id];
+  return null;
+}
+
+function cachePost(post) {
+  if (!post || !post.id) return post;
+  if (!state.postCache) state.postCache = {};
+  state.postCache[post.id] = post;
+  // merge into profile list if present
+  if (state.profilePosts && Array.isArray(state.profilePosts.items)) {
+    const i = state.profilePosts.items.findIndex(p => p.id === post.id);
+    if (i >= 0) state.profilePosts.items[i] = post;
+  }
+  // merge into feed list if present
+  const fi = (state.posts || []).findIndex(p => p.id === post.id);
+  if (fi >= 0) state.posts[fi] = { ...state.posts[fi], ...post, id: post.id };
+  return post;
+}
+
+async function fetchPostById(id) {
+  if (!id) return null;
+  const mem = getPostFromMemory(id);
+  if (mem) return mem;
+  try {
+    const snap = await db.ref('posts/' + id).once('value');
+    if (!snap.exists()) return null;
+    const post = { id, ...snap.val() };
+    return cachePost(post);
+  } catch (e) {
+    console.error('fetchPostById', e);
+    return null;
+  }
+}
+
+function isPostVisibleToViewer(post) {
+  if (!post) return false;
+  const now = Date.now();
+  if (post.publishAt && post.publishAt > now && !isUserAdmin()) return false;
+  return true;
+}
+
+/**
+ * Carrega posts do autor via postsByAuthor (paginado).
+ * reset=true limpa a lista e busca a primeira página.
+ */
+async function loadProfilePosts(handle, reset) {
+  const h = normalizeHandle(handle);
+  if (!h) return;
+  const authorKey = authorKeyFromHandle(h);
+  if (!authorKey) return;
+
+  if (!state.profilePosts) {
+    state.profilePosts = { authorKey: null, handle: null, items: [], oldestTs: null, hasMore: false, loading: false, count: null };
+  }
+
+  if (reset || state.profilePosts.authorKey !== authorKey || state.profilePosts.handle !== h) {
+    state.profilePosts = {
+      authorKey,
+      handle: h,
+      items: [],
+      oldestTs: null,
+      hasMore: true,
+      loading: false,
+      count: state.profilePosts.authorKey === authorKey ? state.profilePosts.count : null
+    };
+  }
+
+  if (state.profilePosts.loading) return;
+  if (!state.profilePosts.hasMore && !reset) return;
+
+  state.profilePosts.loading = true;
+  if (state.currentView === 'profile') renderProfile();
+
+  try {
+    // contagem leve (só IDs + timestamps no índice)
+    if (state.profilePosts.count == null) {
+      try {
+        const countSnap = await db.ref('postsByAuthor/' + authorKey).once('value');
+        state.profilePosts.count = countSnap.numChildren();
+      } catch (_) {
+        state.profilePosts.count = null;
+      }
+    }
+
+    let q = db.ref('postsByAuthor/' + authorKey).orderByValue().limitToLast(PROFILE_PAGE_SIZE);
+    if (state.profilePosts.oldestTs != null) {
+      // página seguinte: mais antigos que o já carregado
+      q = db.ref('postsByAuthor/' + authorKey)
+        .orderByValue()
+        .endAt(state.profilePosts.oldestTs - 1)
+        .limitToLast(PROFILE_PAGE_SIZE);
+    }
+
+    const snap = await q.once('value');
+    const map = snap.val() || {};
+    const entries = Object.entries(map)
+      .map(([postId, ts]) => ({ postId, ts: Number(ts) || 0 }))
+      .sort((a, b) => b.ts - a.ts);
+
+    if (!entries.length) {
+      state.profilePosts.hasMore = false;
+      state.profilePosts.loading = false;
+      if (state.currentView === 'profile') renderProfile();
+      return;
+    }
+
+    const posts = [];
+    for (const { postId } of entries) {
+      // evita duplicar se já está na lista
+      if (state.profilePosts.items.some(p => p.id === postId)) continue;
+      let post = getPostFromMemory(postId);
+      if (!post) {
+        const ps = await db.ref('posts/' + postId).once('value');
+        if (!ps.exists()) {
+          // órfão no índice — remove ref morta (só admin, best-effort)
+          if (isUserAdmin()) {
+            try { await db.ref('postsByAuthor/' + authorKey + '/' + postId).remove(); } catch (_) {}
+          }
+          continue;
+        }
+        post = cachePost({ id: postId, ...ps.val() });
+      }
+      if (isPostVisibleToViewer(post)) posts.push(post);
+    }
+
+    state.profilePosts.items = state.profilePosts.items.concat(posts);
+    // dedupe + sort
+    const seen = new Set();
+    state.profilePosts.items = state.profilePosts.items
+      .filter(p => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    const minTs = entries.reduce((m, e) => Math.min(m, e.ts), Infinity);
+    state.profilePosts.oldestTs = Number.isFinite(minTs) ? minTs : state.profilePosts.oldestTs;
+    state.profilePosts.hasMore = entries.length >= PROFILE_PAGE_SIZE;
+  } catch (e) {
+    console.error('loadProfilePosts', e);
+    showToast('Erro ao carregar publicações.', 'err');
+  } finally {
+    state.profilePosts.loading = false;
+    if (state.currentView === 'profile') renderProfile();
+  }
+}
+
+async function loadMoreProfilePosts() {
+  const h = state.viewProfileHandle || state.profile?.handle;
+  if (!h) return;
+  await loadProfilePosts(h, false);
+}
+
+/**
+ * Backfill one-shot: varre /posts e grava refs em postsByAuthor.
+ * Idempotente (set no mesmo path). Em lotes para não travar.
+ */
+async function adminBackfillPostsByAuthor() {
+  if (!isUserAdmin()) return;
+  const ok = await rgConfirm({
+    title: 'Reconstruir índice postsByAuthor',
+    body: 'Varre os posts existentes e cria referências leves por autor. Não altera o conteúdo dos posts. Pode levar alguns segundos.',
+    confirmLabel: 'Reconstruir',
+    danger: false
+  });
+  if (!ok) return;
+
+  showToast('Indexando…');
+  try {
+    const snap = await db.ref('posts').once('value');
+    const data = snap.val() || {};
+    const entries = Object.entries(data);
+    const BATCH = 40;
+    let written = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const chunk = entries.slice(i, i + BATCH);
+      const updates = {};
+      for (const [id, p] of chunk) {
+        if (!p || typeof p !== 'object') { skipped++; continue; }
+        const key = p.uid || (p.handle ? 'npc_' + normalizeHandle(p.handle) : null);
+        const ts = Number(p.createdAt) || 0;
+        if (!key || !ts) { skipped++; continue; }
+        updates['postsByAuthor/' + key + '/' + id] = ts;
+        written++;
+      }
+      if (Object.keys(updates).length) {
+        await db.ref().update(updates);
+      }
+      // respiro entre lotes
+      await new Promise(r => setTimeout(r, 40));
+    }
+
+    showToast('Índice ok: ' + written + ' refs' + (skipped ? ' · ' + skipped + ' ignorados' : '') + '.');
+  } catch (e) {
+    console.error(e);
+    showToast('Erro no backfill.', 'err');
+  }
 }

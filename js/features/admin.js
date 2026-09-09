@@ -391,6 +391,11 @@ function renderAdminIA() {
 function renderAdminMod() {
   return `
     <section class="panel">
+      <h3>Índice de perfil (postsByAuthor)</h3>
+      <p class="hint">Reconstrói referências leves por autor para posts antigos que ainda não estão no índice. Não altera o conteúdo dos posts nem o feed.</p>
+      <button type="button" class="btn btn-primary" onclick="adminBackfillPostsByAuthor()">Reconstruir índice</button>
+    </section>
+    <section class="panel">
       <h3>Posts recentes</h3>
       <div class="mod-list">
         ${state.posts.slice(0, 20).map(p => `

@@ -105,6 +105,15 @@
         }
       }
     },
+    "postsByAuthor": {
+      ".read": "auth != null",
+      "$authorKey": {
+        ".indexOn": [".value"],
+        "$postId": {
+          ".write": "auth != null && ($authorKey === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)"
+        }
+      }
+    },
     "stories": {
       ".read": "auth != null",
       ".indexOn": ["createdAt"],

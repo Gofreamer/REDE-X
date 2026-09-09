@@ -190,14 +190,24 @@ async function postMenu(id) {
   if (ok) deletePost(id);
 }
 
-function openPostModal(id) {
+async function openPostModal(id) {
   state.activePost = id;
-  renderPostModal(id);
   document.getElementById('post-modal')?.classList.add('open');
   document.body.classList.add('post-modal-open');
   if (location.hash !== '#post/' + id) {
     history.replaceState(null, '', '#post/' + id);
   }
+  // garante post em memória (feed, perfil ou fetch)
+  let p = typeof getPostFromMemory === 'function' ? getPostFromMemory(id) : (state.posts || []).find(x => x.id === id);
+  if (!p) {
+    const root = document.getElementById('post-modal-body');
+    if (root) root.innerHTML = '<p class="text-muted" style="padding:24px">Carregando…</p>';
+    if (typeof fetchPostById === 'function') {
+      p = await fetchPostById(id);
+    }
+  }
+  if (state.activePost !== id) return; // modal já fechou / trocou
+  renderPostModal(id);
 }
 
 function closePostModal() {
@@ -262,7 +272,9 @@ function renderCommentBlock(c, postId, byParent, depth = 0) {
 function renderPostModal(id) {
   const root = document.getElementById('post-modal-body');
   if (!root) return;
-  const p = state.posts.find(x => x.id === id);
+  const p = typeof getPostFromMemory === 'function'
+    ? getPostFromMemory(id)
+    : (state.posts || []).find(x => x.id === id);
   if (!p) {
     root.innerHTML = '<p class="text-muted">Post não encontrado.</p>';
     return;

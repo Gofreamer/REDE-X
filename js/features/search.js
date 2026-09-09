@@ -98,9 +98,14 @@ function renderSearchResults(query) {
 
 function openProfile(handle) {
   closeSearch();
-  state.viewProfileHandle = normalizeHandle(handle);
+  const h = normalizeHandle(handle);
+  state.viewProfileHandle = h;
   state.profileTab = 'posts';
   showView('profile');
+  // histórico próprio (não depende só dos 100 do feed)
+  if (typeof loadProfilePosts === 'function') {
+    loadProfilePosts(h, true).catch(() => {});
+  }
 }
 
 function getProfileBundle(handle) {
@@ -131,9 +136,12 @@ function getProfileBundle(handle) {
   }
   const npc = (state.npcProfiles || {})[h] || {};
   // fallback from posts
-  const post = state.posts.find(p => normalizeHandle(p.handle) === h);
+  const post = (state.posts || []).find(p => normalizeHandle(p.handle) === h)
+    || (state.profilePosts && state.profilePosts.handle === h && state.profilePosts.items[0])
+    || null;
   return {
     kind: 'npc',
+    uid: 'npc_' + h,
     handle: h,
     name: npc.name || post?.name || h,
     bio: npc.bio || '',
@@ -147,7 +155,8 @@ function getProfileBundle(handle) {
   };
 }
 
+/** Fallback: posts do autor ainda presentes na janela do feed. */
 function postsForHandle(handle) {
   const h = normalizeHandle(handle);
-  return state.posts.filter(p => normalizeHandle(p.handle) === h);
+  return (state.posts || []).filter(p => normalizeHandle(p.handle) === h);
 }

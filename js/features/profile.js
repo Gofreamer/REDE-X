@@ -16,10 +16,24 @@ function renderProfile() {
   }
 
   const bundle = getProfileBundle(handle);
-  const posts = postsForHandle(handle);
+  const hNorm = normalizeHandle(handle);
+  // Preferência: histórico indexado do perfil; fallback feed enquanto carrega
+  const pp = state.profilePosts;
+  const usingIndex = pp && pp.handle === hNorm && (pp.items.length || pp.loading || pp.count != null);
+  const posts = usingIndex
+    ? (pp.items || [])
+    : postsForHandle(handle);
+  const postCountDisplay = usingIndex && typeof pp.count === 'number'
+    ? pp.count
+    : posts.length;
   const isMe = bundle.isMe;
   const suspended = !!(bundle.suspended || bundle.banned);
   const banned = !!bundle.banned;
+
+  // se ainda não começou o load do índice para este handle, dispara
+  if (state.profileTab !== 'saved' && (!pp || pp.handle !== hNorm) && typeof loadProfilePosts === 'function') {
+    loadProfilePosts(hNorm, true).catch(() => {});
+  }
 
   el.innerHTML = `
     <div class="ig-profile ${banned ? 'profile-banned' : (suspended ? 'profile-suspended' : '')}">
@@ -46,7 +60,7 @@ function renderProfile() {
             ${isUserAdmin() ? `<button type="button" class="btn btn-edit" onclick="toggleVerified('${escapeHTML(bundle.handle)}','${escapeHTML(bundle.kind)}')">${bundle.verified ? 'Remover ✓' : 'Verificar ✓'}</button>` : ''}
           </div>
           <div class="ig-stats">
-            <div class="ig-stat"><strong>${posts.length}</strong><span>publicacoes</span></div>
+            <div class="ig-stat"><strong>${formatCount(postCountDisplay)}</strong><span>publicacoes</span></div>
             <div class="ig-stat"><strong>${formatCount(bundle.followers)}</strong><span>seguidores</span></div>
             <div class="ig-stat"><strong>${formatCount(bundle.following)}</strong><span>seguindo</span></div>
           </div>
@@ -97,24 +111,51 @@ function renderProfile() {
         ${(() => {
           if (isMe && state.profileTab === 'saved') {
             const savedIds = Object.keys(state.saves || {});
+            if (!savedIds.length) {
+              return `<div class="grid-empty">Nenhum post salvo.<br><span class="text-muted">Toque na estrela nos posts pra guardar evidências.</span></div>`;
+            }
+            // resolve da memória; IDs sem post em cache disparam fetch em background
             const savedPosts = savedIds
-              .map(id => state.posts.find(p => p.id === id))
+              .map(id => {
+                const p = typeof getPostFromMemory === 'function' ? getPostFromMemory(id) : (state.posts || []).find(x => x.id === id);
+                if (!p && typeof fetchPostById === 'function') {
+                  fetchPostById(id).then(fp => {
+                    if (fp && state.currentView === 'profile' && state.profileTab === 'saved') renderProfile();
+                  }).catch(() => {});
+                }
+                return p;
+              })
               .filter(Boolean)
               .sort((a, b) => (state.saves[b.id]?.at || 0) - (state.saves[a.id]?.at || 0));
             if (!savedPosts.length) {
-              return `<div class="grid-empty">Nenhum post salvo.<br><span class="text-muted">Toque na estrela nos posts pra guardar evidências.</span></div>`;
+              return `<div class="grid-empty">Carregando salvos…</div>`;
             }
             return savedPosts.map(post => `
               <button type="button" class="grid-cell" onclick="openPostModal('${post.id}')">
                 <img src="${escapeHTML(post.image)}" alt="" loading="lazy"/>
               </button>`).join('');
           }
-          return posts.length
+
+          if (usingIndex && pp.loading && !posts.length) {
+            return `<div class="grid-empty">Carregando publicações…</div>`;
+          }
+
+          const grid = posts.length
             ? posts.map(post => `
                 <button type="button" class="grid-cell" onclick="openPostModal('${post.id}')">
                   <img src="${escapeHTML(post.image)}" alt="" loading="lazy"/>
                 </button>`).join('')
             : `<div class="grid-empty">Ainda não há publicações.</div>`;
+
+          const moreBtn = usingIndex && pp.hasMore
+            ? `<div class="profile-load-more">
+                <button type="button" class="btn btn-ghost btn-sm" ${pp.loading ? 'disabled' : ''} onclick="loadMoreProfilePosts()">
+                  ${pp.loading ? 'Carregando…' : 'Carregar mais'}
+                </button>
+              </div>`
+            : '';
+
+          return grid + moreBtn;
         })()}
       </div>
     </div>

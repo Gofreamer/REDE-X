@@ -12,7 +12,14 @@ function showView(view) {
     b.classList.toggle('active', b.dataset.view === view);
   });
   if (view === 'feed') renderFeed();
-  if (view === 'profile') renderProfile();
+  if (view === 'profile') {
+    renderProfile();
+    const h = state.viewProfileHandle || state.profile?.handle;
+    if (h && typeof loadProfilePosts === 'function') {
+      const need = !state.profilePosts || state.profilePosts.handle !== normalizeHandle(h);
+      if (need) loadProfilePosts(h, true).catch(() => {});
+    }
+  }
   if (view === 'admin') renderAdmin();
   if (view === 'notifications') renderNotifications();
   if (view === 'dms') renderDMs();

@@ -14,6 +14,16 @@ const state = {
   following: {},
   mediaLibrary: [],
   saves: {},          // postId -> timestamp (coleção privada do player)
+  postCache: {},      // posts fora da janela do feed (perfil / link direto)
+  profilePosts: {
+    authorKey: null,
+    handle: null,
+    items: [],
+    oldestTs: null,
+    hasMore: false,
+    loading: false,
+    count: null
+  },
   currentView: 'feed',
   viewProfileHandle: null,
   activePost: null,
