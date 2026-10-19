@@ -1,7 +1,7 @@
 /* Rede Global — Firebase AI Logic (mesmo padrão GS / Jet League) */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-ai.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app-check.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-ai.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app-check.js";
 
 const aiFirebaseConfig = {
   apiKey: "AIzaSyAbc_DWHKEambENHQUTFpWLrQxWqkq8Imw",
@@ -13,31 +13,49 @@ const aiFirebaseConfig = {
   appId: "1:599992301936:web:3a7656cf52732bd076b7b5"
 };
 
-// Deixe vazio para NÃO ativar App Check (igual GS).
-const APP_CHECK_SITE_KEY = "";
+// Chave pública de produção, restrita a rede-x.pages.dev.
+const APP_CHECK_SITE_KEY = "6LcsDPYtAAAAALuC_cOH0OVIvJicJ2lPZbNtAP7x";
+const DEFAULT_AI_MODEL = "gemini-3.8-flash";
 
 let aiApp = null;
-let appCheckReady = false;
+let aiAppCheck = null;
 
 function getAIApp() {
   if (!aiApp) aiApp = initializeApp(aiFirebaseConfig, "rgAI");
-  if (!appCheckReady && APP_CHECK_SITE_KEY) {
-    try {
-      initializeAppCheck(aiApp, {
-        provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
-        isTokenAutoRefreshEnabled: true
-      });
-    } catch (e) {
-      console.warn("App Check:", e?.message || e);
-    }
-    appCheckReady = true;
+  if (!aiAppCheck) {
+    aiAppCheck = initializeAppCheck(aiApp, {
+      provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true
+    });
   }
   return aiApp;
 }
 
-async function jetStyleGenerate(prompt, modelName = "gemini-3.6-flash") {
-  const ai = getAI(getAIApp(), { backend: new GoogleAIBackend() });
-  const candidates = [modelName, "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
+function getFirebaseAIErrorMessage(err) {
+  const msg = err?.message || String(err);
+  if (/deactivated|AI Logic Project is inactive|onboarding/i.test(msg)) {
+    return "Firebase AI Logic inativo no projeto rede-x. Confira a configuração e a aplicação do App Check no console Firebase.";
+  }
+  if (/app.?check|recaptcha|attestation/i.test(msg)) {
+    return "Não foi possível validar o App Check. Recarregue o site e confira o domínio autorizado. No localhost, use um token de depuração cadastrado.";
+  }
+  if (/quota|429|rate.limit|free_tier/i.test(msg)) {
+    return "Cota da IA esgotada ou indisponível. Aguarde a renovação ou confira os limites do projeto.";
+  }
+  if (/401|403|permission.denied|unauthenticated/i.test(msg)) {
+    return "Acesso à IA negado pelo projeto Firebase. Confira as permissões e o App Check no console.";
+  }
+  return msg;
+}
+
+async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL) {
+  const app = getAIApp();
+  await getToken(aiAppCheck);
+  const ai = getAI(app, {
+    backend: new GoogleAIBackend(),
+    useLimitedUseAppCheckTokens: true
+  });
+  const candidates = [modelName, DEFAULT_AI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash-lite"];
   const tried = new Set();
   let lastErr;
   for (const m of candidates) {
@@ -50,6 +68,13 @@ async function jetStyleGenerate(prompt, modelName = "gemini-3.6-flash") {
     } catch (e) {
       lastErr = e;
       console.warn("AI model failed:", m, e?.message || e);
+      // Só uma indisponibilidade de modelo justifica tentar outra versão.
+      // Falhas de App Check, permissão e cota devem ser corrigidas na origem.
+      const message = e?.message || String(e);
+      if (/401|403|429|permission.denied|unauthenticated|app.?check|recaptcha|deactivated|onboarding|quota|rate.limit/i.test(message)
+          || !/404|model[^\n]*(?:not found|not supported|unavailable)|unsupported model/i.test(message)) {
+        throw e;
+      }
     }
   }
   throw lastErr || new Error("Nenhum modelo Gemini disponível");
@@ -84,7 +109,7 @@ async function generatePostWithAI() {
     btn.disabled = true;
     btn.textContent = "Gerando…";
   }
-  if (status) status.textContent = "Firebase AI · gemini-3.6-flash…";
+  if (status) status.textContent = "Firebase AI · gemini-3.8-flash…";
 
   // se não escolheu NPC, deixa a IA sugerir handle+nome+legenda
   const needIdentity = !handle;
@@ -104,7 +129,7 @@ Conta: @${handle} (${name || handle})
 Responda SOMENTE JSON: {"caption":"texto da legenda"}`;
 
   try {
-    let raw = await jetStyleGenerate(prompt, "gemini-3.6-flash");
+    let raw = await jetStyleGenerate(prompt);
     raw = String(raw || "").trim();
     let caption = "";
     // tenta JSON
@@ -144,9 +169,9 @@ Responda SOMENTE JSON: {"caption":"texto da legenda"}`;
     if (typeof showToast === "function") showToast("Post gerado — revise no modal.");
   } catch (e) {
     console.error(e);
-    if (status) status.textContent = "Falha: " + (e?.message || "erro");
+    if (status) status.textContent = "Falha: " + getFirebaseAIErrorMessage(e);
     if (typeof showToast === "function") {
-      showToast("Erro na IA. Ative Gemini no Firebase AI Logic do projeto rede-x.", "err");
+      showToast("Falha na IA. Confira a mensagem de erro acima.", "err");
     }
   } finally {
     if (btn) {
@@ -168,7 +193,7 @@ function ensureAiPostModal() {
       <div class="aic-head">
         <div>
           <h3>Revisar post IA</h3>
-          <p class="aic-sub" id="aip-status">gemini-3.6-flash</p>
+          <p class="aic-sub" id="aip-status">gemini-3.8-flash</p>
         </div>
         <button type="button" class="icon-btn" onclick="closeAiPostReview()">✕</button>
       </div>
@@ -240,7 +265,7 @@ async function regenAiPostCaption() {
     const prompt = `Legenda Instagram (max 280 chars, PT-BR, 1-3 hashtags) para @${handle} (${name}).
 Ideia: ${idea}
 Só o texto da legenda, sem aspas.`;
-    let text = await jetStyleGenerate(prompt, "gemini-3.6-flash");
+    let text = await jetStyleGenerate(prompt);
     text = String(text || "").trim().replace(/^["«]|["»]$/g, "");
     document.getElementById("aip-caption").value = text.slice(0, 500);
     if (status) status.textContent = "Legenda regenerada";
@@ -307,7 +332,7 @@ Gere EXATAMENTE 3 posts em JSON array:
 [{"handle":"sem_@","name":"Nome","caption":"legenda max 200 chars com hashtag"}]
 Handles inventados de mídia/NPC da cidade. Só o JSON.`;
   try {
-    let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    let text = await jetStyleGenerate(prompt);
     const a = text.indexOf('[');
     const b = text.lastIndexOf(']');
     let arr = [];
@@ -325,7 +350,7 @@ Handles inventados de mídia/NPC da cidade. Só o JSON.`;
     if (typeof showToast === 'function') showToast('Lote gerado.');
   } catch (e) {
     console.error(e);
-    if (out) out.textContent = 'Falha: ' + (e.message || e);
+    if (out) out.textContent = 'Falha: ' + getFirebaseAIErrorMessage(e);
   }
 }
 
@@ -486,7 +511,7 @@ async function runAiCommentsGenerate() {
   } catch (e) {
     console.error(e);
     if (list) {
-      list.innerHTML = `<div class="aic-empty"><p>Falha na IA.</p><p class="hint">${escapeHTMLSafe(e?.message || 'erro')}</p>
+      list.innerHTML = `<div class="aic-empty"><p>Falha na IA.</p><p class="hint">${escapeHTMLSafe(getFirebaseAIErrorMessage(e))}</p>
         <button type="button" class="btn btn-ghost btn-sm" onclick="runAiCommentsGenerate()">Tentar de novo</button></div>`;
     }
     if (status) status.textContent = 'erro';
@@ -544,7 +569,7 @@ Regras fixas:
 JSON only:
 [{"handle":"sem_arroba","name":"Nome","text":"comentário"}]`;
 
-  let text = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+  let text = await jetStyleGenerate(prompt);
   text = String(text || '').trim();
   const a = text.indexOf('[');
   const b = text.lastIndexOf(']');
@@ -752,7 +777,7 @@ async function aiCommentRegenOne(i) {
     const prompt = `1 comentário (máx 120 chars) como @${d.handle} (${d.name}) no post de @${post.handle}: "${(post.caption || '').slice(0, 300)}".
 ${toneLine}
 Sem meta de RPG/IA. Sem aspas. Só o texto.`;
-    let textOut = await jetStyleGenerate(prompt, 'gemini-3.6-flash');
+    let textOut = await jetStyleGenerate(prompt);
     d.text = String(textOut || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240);
     renderAiCommentsList();
   } catch (e) {
@@ -838,4 +863,5 @@ window.aiCommentSetHandle = aiCommentSetHandle;
 window.aiCommentSetName = aiCommentSetName;
 window.aiCommentSetText = aiCommentSetText;
 window.aiCommentRegenOne = aiCommentRegenOne;
+
 
