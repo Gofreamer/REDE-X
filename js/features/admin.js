@@ -356,7 +356,7 @@ function renderAdminIA() {
   return `
     <section class="panel">
       <h3>Gerar post com IA</h3>
-      <p class="hint">Firebase AI · gemini-3.6-flash · você revisa antes de publicar</p>
+      <p class="hint">Firebase AI · gemini-3.8-flash · você revisa antes de publicar</p>
       <div class="form-group">
         <label>NPC (opcional — vazio = IA sugere conta)</label>
         ${npcSelectHTML('ai-handle')}
@@ -525,3 +525,4 @@ async function openSessionModal() {
   }
   await setSessionMode({ postId: data.postId || null, label: data.label });
 }
+
