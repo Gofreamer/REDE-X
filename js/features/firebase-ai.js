@@ -72,7 +72,7 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL) {
       // Falhas de App Check, permissão e cota devem ser corrigidas na origem.
       const message = e?.message || String(e);
       if (/401|403|429|permission.denied|unauthenticated|app.?check|recaptcha|deactivated|onboarding|quota|rate.limit/i.test(message)
-          || !/404|model[^\n]*(?:not found|not supported|unavailable)|unsupported model/i.test(message)) {
+          || !/404|model[^\n]*(?:not found|not supported|unavailable)|unsupported model|high demand|overloaded|temporarily unavailable|\b503\b/i.test(message)) {
         throw e;
       }
     }
