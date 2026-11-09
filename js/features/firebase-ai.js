@@ -1,7 +1,7 @@
 /* Rede Global — Firebase AI Logic (mesmo padrão GS / Jet League) */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-ai.js";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app-check.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-ai.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app-check.js";
 
 const aiFirebaseConfig = {
   apiKey: "AIzaSyAbc_DWHKEambENHQUTFpWLrQxWqkq8Imw",
@@ -20,6 +20,7 @@ const COMMENTS_AI_MODEL = "gemini-3.5-flash-lite";
 
 let aiApp = null;
 let aiAppCheck = null;
+let aiRequestInFlight = false;
 
 function withAiDeadline(promise, ms, code, message, onTimeout) {
   let timer;
@@ -41,7 +42,9 @@ function getAIApp() {
   if (!aiAppCheck) {
     aiAppCheck = initializeAppCheck(aiApp, {
       provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
-      isTokenAutoRefreshEnabled: true
+      // AI Logic requests a fresh limited-use token for every request. A
+      // separate session-token refresh would add redundant attestations.
+      isTokenAutoRefreshEnabled: false
     });
   }
   return aiApp;
@@ -49,7 +52,13 @@ function getAIApp() {
 
 function getFirebaseAIErrorMessage(err) {
   const msg = err?.message || String(err);
-  if (err?.code === 'rg-ai/app-check-timeout' || err?.code === 'rg-ai/model-timeout') return msg;
+  if (err?.code === 'rg-ai/request-timeout' || err?.code === 'rg-ai/busy') return msg;
+  if (/appcheck\/(?:initial-throttle|throttled)|requests throttled|attempts allowed again after/i.test(msg)) {
+    const wait = msg.match(/(?:after|por)\s+([0-9dhms:]+)/i)?.[1];
+    return 'A validação de segurança foi recusada e o App Check bloqueou novas tentativas nesta sessão.'
+      + (wait ? ' Prazo informado: ' + wait + '.' : '')
+      + ' Repetir a geração agora não resolve. Detalhe original: ' + msg;
+  }
   if (/high demand|overloaded|deadline expired|timeout|timed out|\b503\b/i.test(msg)) {
     return 'O Gemini está sobrecarregado ou excedeu o tempo de resposta. Tente novamente em instantes.';
   }
@@ -69,10 +78,21 @@ function getFirebaseAIErrorMessage(err) {
 }
 
 async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress = () => {}, generationConfig) {
-  onProgress('Validando acesso à IA…');
+  if (aiRequestInFlight) {
+    const error = new Error('Já existe uma geração em andamento. Aguarde ela terminar antes de tentar outra.');
+    error.code = 'rg-ai/busy';
+    throw error;
+  }
+  aiRequestInFlight = true;
+  try {
+    return await generateWithFirebase(prompt, modelName, onProgress, generationConfig);
+  } finally {
+    aiRequestInFlight = false;
+  }
+}
+
+async function generateWithFirebase(prompt, modelName, onProgress, generationConfig) {
   const app = getAIApp();
-  await withAiDeadline(getToken(aiAppCheck), 15000, 'rg-ai/app-check-timeout',
-    'A validação de acesso (App Check) não respondeu em 15 segundos. Recarregue a página e tente novamente.');
   const ai = getAI(app, {
     backend: new GoogleAIBackend(),
     useLimitedUseAppCheckTokens: true
@@ -84,12 +104,12 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress
     if (tried.has(m)) continue;
     tried.add(m);
     try {
-      onProgress(tried.size > 1 ? 'Tentando modelo alternativo…' : 'Gerando com Gemini…');
+      onProgress(tried.size > 1 ? 'Tentando modelo alternativo…' : 'Validando acesso e gerando com Gemini…');
       const controller = new AbortController();
       const model = getGenerativeModel(ai, { model: m, generationConfig }, { timeout: 30000 });
       const result = await withAiDeadline(
-        model.generateContent(prompt, { signal: controller.signal }), 35000, 'rg-ai/model-timeout',
-        'A solicitação ao Gemini não respondeu em 35 segundos. Tente novamente em instantes.',
+        model.generateContent(prompt, { signal: controller.signal }), 35000, 'rg-ai/request-timeout',
+        'A validação de acesso ou a geração não respondeu em 35 segundos. Tente novamente em instantes.',
         () => controller.abort()
       );
       const text = result.response.text();
