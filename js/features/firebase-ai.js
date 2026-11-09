@@ -20,6 +20,21 @@ const DEFAULT_AI_MODEL = "gemini-3.8-flash";
 let aiApp = null;
 let aiAppCheck = null;
 
+function withAiDeadline(promise, ms, code, message, onTimeout) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error(message);
+        error.code = code;
+        reject(error);
+        onTimeout?.();
+      }, ms);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 function getAIApp() {
   if (!aiApp) aiApp = initializeApp(aiFirebaseConfig, "rgAI");
   if (!aiAppCheck) {
@@ -33,6 +48,7 @@ function getAIApp() {
 
 function getFirebaseAIErrorMessage(err) {
   const msg = err?.message || String(err);
+  if (err?.code === 'rg-ai/app-check-timeout' || err?.code === 'rg-ai/model-timeout') return msg;
   if (/deactivated|AI Logic Project is inactive|onboarding/i.test(msg)) {
     return "Firebase AI Logic inativo no projeto rede-x. Confira a configuração e a aplicação do App Check no console Firebase.";
   }
@@ -48,9 +64,11 @@ function getFirebaseAIErrorMessage(err) {
   return msg;
 }
 
-async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL) {
+async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress = () => {}) {
+  onProgress('Validando acesso à IA…');
   const app = getAIApp();
-  await getToken(aiAppCheck);
+  await withAiDeadline(getToken(aiAppCheck), 15000, 'rg-ai/app-check-timeout',
+    'A validação de acesso (App Check) não respondeu em 15 segundos. Recarregue a página e tente novamente.');
   const ai = getAI(app, {
     backend: new GoogleAIBackend(),
     useLimitedUseAppCheckTokens: true
@@ -62,9 +80,17 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL) {
     if (tried.has(m)) continue;
     tried.add(m);
     try {
-      const model = getGenerativeModel(ai, { model: m });
-      const result = await model.generateContent(prompt);
-      return result.response.text();
+      onProgress(tried.size > 1 ? 'Tentando modelo alternativo…' : 'Gerando com Gemini…');
+      const controller = new AbortController();
+      const model = getGenerativeModel(ai, { model: m }, { timeout: 30000 });
+      const result = await withAiDeadline(
+        model.generateContent(prompt, { signal: controller.signal }), 35000, 'rg-ai/model-timeout',
+        'A solicitação ao Gemini não respondeu em 35 segundos. Tente novamente em instantes.',
+        () => controller.abort()
+      );
+      const text = result.response.text();
+      if (!text?.trim()) throw new Error('O Gemini retornou uma resposta vazia. Tente novamente com outra instrução.');
+      return text;
     } catch (e) {
       lastErr = e;
       console.warn("AI model failed:", m, e?.message || e);
@@ -369,6 +395,8 @@ function applyBatchItem(i) {
 /* ── IA: comentários com revisão ── */
 window.__rgAiComments = [];
 window.__rgAiCommentsPostId = null;
+let aiCommentsRequestId = 0;
+let aiCommentsBusy = false;
 /** 'registered' = só NPCs cadastradas | 'random' = inventar contas novas */
 window.__rgAiNpcMode = 'random';
 
@@ -445,8 +473,14 @@ async function openAiCommentsReview(postId, count = 3, autoGenerate = false) {
   }
 
   window.__rgAiCommentsPostId = postId;
+  aiCommentsRequestId++;
+  aiCommentsBusy = false;
   window.__rgAiComments = []; // limpa rascunhos anteriores
   ensureAiCommentsModal();
+  const generateBtn = document.getElementById('ai-comments-generate');
+  const publishBtn = document.getElementById('ai-comments-publish');
+  if (generateBtn) generateBtn.disabled = false;
+  if (publishBtn) publishBtn.disabled = false;
   const modal = document.getElementById('ai-comments-modal');
   const list = document.getElementById('ai-comments-list');
   const status = document.getElementById('ai-comments-status');
@@ -484,6 +518,7 @@ function setAiCommentsTone(tone) {
 }
 
 async function runAiCommentsGenerate() {
+  if (aiCommentsBusy) return;
   const postId = window.__rgAiCommentsPostId;
   const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
   if (!post) return;
@@ -494,6 +529,12 @@ async function runAiCommentsGenerate() {
   const n = Math.max(1, Math.min(8, parseInt(countEl?.value, 10) || 3));
   const tone = getAiCommentsTone();
   const mode = getAiNpcMode();
+  const requestId = ++aiCommentsRequestId;
+  aiCommentsBusy = true;
+  const generateBtn = document.getElementById('ai-comments-generate');
+  const publishBtn = document.getElementById('ai-comments-publish');
+  if (generateBtn) generateBtn.disabled = true;
+  if (publishBtn) publishBtn.disabled = true;
 
   if (list) {
     list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>Gemini gerando com o tom escolhido…</p></div>`;
@@ -504,22 +545,34 @@ async function runAiCommentsGenerate() {
   }
 
   try {
-    const drafts = await generateAiCommentDrafts(post, n, tone, mode);
+    const drafts = await generateAiCommentDrafts(post, n, tone, mode, message => {
+      if (requestId !== aiCommentsRequestId) return;
+      if (status) status.textContent = message;
+      if (list) list.innerHTML = `<div class="aic-loading"><div class="aic-spinner"></div><p>${escapeHTMLSafe(message)}</p></div>`;
+    });
+    if (requestId !== aiCommentsRequestId) return;
     window.__rgAiComments = drafts;
     renderAiCommentsList();
     if (status) status.textContent = drafts.length + ' rascunho(s) · revise antes de publicar';
   } catch (e) {
     console.error(e);
+    if (requestId !== aiCommentsRequestId) return;
     if (list) {
       list.innerHTML = `<div class="aic-empty"><p>Falha na IA.</p><p class="hint">${escapeHTMLSafe(getFirebaseAIErrorMessage(e))}</p>
         <button type="button" class="btn btn-ghost btn-sm" onclick="runAiCommentsGenerate()">Tentar de novo</button></div>`;
     }
     if (status) status.textContent = 'erro';
     if (typeof showToast === 'function') showToast('Erro na IA de comentários.', 'err');
+  } finally {
+    if (requestId === aiCommentsRequestId) {
+      aiCommentsBusy = false;
+      if (generateBtn) generateBtn.disabled = false;
+      if (publishBtn) publishBtn.disabled = false;
+    }
   }
 }
 
-async function generateAiCommentDrafts(post, count, tone, mode) {
+async function generateAiCommentDrafts(post, count, tone, mode, onProgress) {
   mode = mode || getAiNpcMode();
   const registered = getRegisteredNpcPool();
   const fallback = getFallbackNpcPool();
@@ -569,7 +622,7 @@ Regras fixas:
 JSON only:
 [{"handle":"sem_arroba","name":"Nome","text":"comentário"}]`;
 
-  let text = await jetStyleGenerate(prompt);
+  let text = await jetStyleGenerate(prompt, DEFAULT_AI_MODEL, onProgress);
   text = String(text || '').trim();
   const a = text.indexOf('[');
   const b = text.lastIndexOf(']');
@@ -651,7 +704,7 @@ function ensureAiCommentsModal() {
           <label class="aic-count-label">Qtd
             <input type="number" class="input input-sm aic-count" id="aic-count" min="1" max="8" value="3"/>
           </label>
-          <button type="button" class="btn btn-primary btn-sm" onclick="runAiCommentsGenerate()">✦ Gerar com este tom</button>
+          <button type="button" class="btn btn-primary btn-sm" id="ai-comments-generate" onclick="runAiCommentsGenerate()">✦ Gerar com este tom</button>
         </div>
       </div>
       <div class="aic-toolbar">
@@ -786,6 +839,12 @@ Sem meta de RPG/IA. Sem aspas. Só o texto.`;
 }
 
 function closeAiCommentsModal() {
+  aiCommentsRequestId++;
+  aiCommentsBusy = false;
+  const generateBtn = document.getElementById('ai-comments-generate');
+  const publishBtn = document.getElementById('ai-comments-publish');
+  if (generateBtn) generateBtn.disabled = false;
+  if (publishBtn) publishBtn.disabled = false;
   document.getElementById('ai-comments-modal')?.classList.remove('open');
 }
 
