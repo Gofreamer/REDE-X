@@ -502,6 +502,8 @@ async function openAiCommentsReview(postId, count = 3, autoGenerate = false) {
   aiCommentsBusy = false;
   window.__rgAiComments = []; // limpa rascunhos anteriores
   ensureAiCommentsModal();
+  const aiOptions = document.getElementById('aic-ai-options');
+  if (aiOptions) aiOptions.hidden = false;
   const generateBtn = document.getElementById('ai-comments-generate');
   const publishBtn = document.getElementById('ai-comments-publish');
   if (generateBtn) generateBtn.disabled = false;
@@ -545,6 +547,8 @@ async function openManualCommentsReview(postId) {
 
 function addManualCommentDrafts(count = 1) {
   if (typeof isUserAdmin === 'function' && !isUserAdmin()) return;
+  const aiOptions = document.getElementById('aic-ai-options');
+  if (aiOptions) aiOptions.hidden = true;
   // Invalidate a pending AI result so it cannot overwrite handwritten drafts.
   aiCommentsRequestId++;
   aiCommentsBusy = false;
@@ -569,6 +573,8 @@ function setAiCommentsTone(tone) {
 
 async function runAiCommentsGenerate() {
   if (aiCommentsBusy) return;
+  const aiOptions = document.getElementById('aic-ai-options');
+  if (aiOptions) aiOptions.hidden = false;
   const postId = window.__rgAiCommentsPostId;
   const post = (typeof state !== 'undefined' ? state.posts : []).find(p => p.id === postId);
   if (!post) return;
@@ -731,6 +737,7 @@ function ensureAiCommentsModal() {
       </div>
       <div id="ai-comments-meta" class="aic-meta"></div>
       <div class="aic-tone-block">
+        <div id="aic-ai-options">
         <label class="aic-tone-label">Contas (NPC) <span>(quem comenta)</span></label>
         <div class="aic-npc-mode-row">
           <input type="hidden" id="aic-npc-mode" value="random"/>
@@ -749,6 +756,7 @@ function ensureAiCommentsModal() {
           <button type="button" class="aic-chip" onclick="setAiCommentsTone('zoação leve entre amigos da cidade, ironia sem ofensa pesada')">Zoação</button>
           <button type="button" class="aic-chip" onclick="setAiCommentsTone('hype de lançamento, urgência de quem quer comprar')">Hype</button>
           <button type="button" class="aic-chip" onclick="setAiCommentsTone('comentários curtos e secos, quase sem emoji')">Seco</button>
+        </div>
         </div>
         <div class="aic-gen-row">
           <label class="aic-count-label">Qtd
