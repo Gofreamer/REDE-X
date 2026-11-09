@@ -34,7 +34,7 @@ function harness({ failures = {}, tokenError, initError, tokenPending, modelPend
       calls.signals.push(request.signal);
       calls.events.push('generate');
       calls.models.push(model);
-      if (failures[model]) throw new Error(failures[model]);
+      if (failures[model]) throw typeof failures[model] === 'string' ? new Error(failures[model]) : failures[model];
       if (modelPending) return new Promise(() => {});
       return { response: { text: () => emptyResponse ? '' : 'ok' } };
     } })
@@ -66,15 +66,15 @@ for (const message of ['[403] Firebase AI Logic has been deactivated', '[429] qu
 }
 
 test('modelo indisponível permite fallback sem duplicar modelos', async () => {
-  const h = harness({ failures: { 'gemini-3.8-flash': '[404] model not found', 'gemini-3.6-flash': '[404] model not found' } });
+  const h = harness({ failures: { 'gemini-3.8-flash': '[404] model not found', 'gemini-3.5-flash-lite': '[404] model not found' } });
   assert.equal(await h.run(), 'ok');
-  assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']);
+  assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash']);
 });
 
 test('alta demanda temporária permite usar o modelo alternativo', async () => {
   const h = harness({ failures: { 'gemini-3.8-flash': '[500] This model is currently experiencing high demand' } });
   assert.equal(await h.run(), 'ok');
-  assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.6-flash']);
+  assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
 });
 
 test('falha no App Check não envia pedido à IA', async () => {
@@ -120,6 +120,15 @@ test('resposta vazia é um erro visível, sem repetir requisições', async () =
   assert.deepEqual(h.calls.models, ['gemini-3.8-flash']);
 });
 
+test('timeout abortado pelo SDK permite tentar Flash-Lite', async () => {
+  const error = new Error('Timeout has expired.');
+  error.name = 'AbortError';
+  const h = harness({ failures: { 'gemini-3.8-flash': error } });
+  assert.equal(await h.run(), 'ok');
+  assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+  assert.match(h.friendly(error), /excedeu o tempo/);
+});
+
 test('comentários bloqueiam cliques duplicados e saem do carregamento após erro', async () => {
   const elements = Object.fromEntries(['ai-comments-list', 'ai-comments-status', 'ai-comments-generate', 'ai-comments-publish']
     .map(id => [id, { innerHTML: '', textContent: '', disabled: false }]));
@@ -155,3 +164,19 @@ function loadFullSource(context) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/features/firebase-ai.js'), 'utf8')
     .replace(/^import .*;\r?\n/gm, ''), context);
 }
+
+test('comentários usam Flash-Lite e pedem JSON, sem depender primeiro do 3.8', async () => {
+  const context = vm.createContext({ window: {}, state: {}, document: { getElementById: () => null } });
+  loadFullSource(context);
+  let requestedModel;
+  let requestedConfig;
+  context.jetStyleGenerate = async (_prompt, model, _progress, config) => {
+    requestedModel = model;
+    requestedConfig = config;
+    return '[{"handle":"torcedor","name":"Torcedor","text":"Bora pro título!"}]';
+  };
+  const drafts = await context.generateAiCommentDrafts({ handle: 'asgard', caption: 'Novo time' }, 1, '', 'random');
+  assert.equal(requestedModel, 'gemini-3.5-flash-lite');
+  assert.equal(requestedConfig.responseMimeType, 'application/json');
+  assert.equal(drafts[0].text, 'Bora pro título!');
+});
