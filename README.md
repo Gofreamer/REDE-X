@@ -22,6 +22,7 @@ HTML + CSS + JS · Firebase Auth · Realtime Database (projeto `rede-x`)
 - Posts fixados
 - Menções com notificação + badge no mobile
 - Compartilhar post (copia link `#post/id`)
+- Voltar/Avançar do navegador acompanha telas, perfis, publicações, busca, criação e conversas. Links diretos de posts/perfis têm o feed como tela anterior. Fechar uma publicação retorna ao contexto de origem.
 - Conta verificada (admin marca ✓)
 
 ## Deploy
