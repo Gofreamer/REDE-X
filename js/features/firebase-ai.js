@@ -16,6 +16,7 @@ const aiFirebaseConfig = {
 // Chave pública de produção, restrita a rede-x.pages.dev.
 const APP_CHECK_SITE_KEY = "6LcsDPYtAAAAALuC_cOH0OVIvJicJ2lPZbNtAP7x";
 const DEFAULT_AI_MODEL = "gemini-3.8-flash";
+const COMMENTS_AI_MODEL = "gemini-3.5-flash-lite";
 
 let aiApp = null;
 let aiAppCheck = null;
@@ -49,6 +50,9 @@ function getAIApp() {
 function getFirebaseAIErrorMessage(err) {
   const msg = err?.message || String(err);
   if (err?.code === 'rg-ai/app-check-timeout' || err?.code === 'rg-ai/model-timeout') return msg;
+  if (/high demand|overloaded|deadline expired|timeout|timed out|\b503\b/i.test(msg)) {
+    return 'O Gemini está sobrecarregado ou excedeu o tempo de resposta. Tente novamente em instantes.';
+  }
   if (/deactivated|AI Logic Project is inactive|onboarding/i.test(msg)) {
     return "Firebase AI Logic inativo no projeto rede-x. Confira a configuração e a aplicação do App Check no console Firebase.";
   }
@@ -64,7 +68,7 @@ function getFirebaseAIErrorMessage(err) {
   return msg;
 }
 
-async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress = () => {}) {
+async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress = () => {}, generationConfig) {
   onProgress('Validando acesso à IA…');
   const app = getAIApp();
   await withAiDeadline(getToken(aiAppCheck), 15000, 'rg-ai/app-check-timeout',
@@ -73,7 +77,7 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress
     backend: new GoogleAIBackend(),
     useLimitedUseAppCheckTokens: true
   });
-  const candidates = [modelName, DEFAULT_AI_MODEL, "gemini-3.6-flash", "gemini-3.5-flash-lite"];
+  const candidates = [modelName, COMMENTS_AI_MODEL, "gemini-3.6-flash"];
   const tried = new Set();
   let lastErr;
   for (const m of candidates) {
@@ -82,7 +86,7 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress
     try {
       onProgress(tried.size > 1 ? 'Tentando modelo alternativo…' : 'Gerando com Gemini…');
       const controller = new AbortController();
-      const model = getGenerativeModel(ai, { model: m }, { timeout: 30000 });
+      const model = getGenerativeModel(ai, { model: m, generationConfig }, { timeout: 30000 });
       const result = await withAiDeadline(
         model.generateContent(prompt, { signal: controller.signal }), 35000, 'rg-ai/model-timeout',
         'A solicitação ao Gemini não respondeu em 35 segundos. Tente novamente em instantes.',
@@ -97,8 +101,9 @@ async function jetStyleGenerate(prompt, modelName = DEFAULT_AI_MODEL, onProgress
       // Só uma indisponibilidade de modelo justifica tentar outra versão.
       // Falhas de App Check, permissão e cota devem ser corrigidas na origem.
       const message = e?.message || String(e);
+      const requestTimedOut = e?.name === 'AbortError' && /timeout|timed out/i.test(message);
       if (/401|403|429|permission.denied|unauthenticated|app.?check|recaptcha|deactivated|onboarding|quota|rate.limit/i.test(message)
-          || !/404|model[^\n]*(?:not found|not supported|unavailable)|unsupported model|high demand|overloaded|temporarily unavailable|\b503\b/i.test(message)) {
+          || (!requestTimedOut && !/404|model[^\n]*(?:not found|not supported|unavailable)|unsupported model|high demand|overloaded|temporarily unavailable|\b503\b/i.test(message))) {
         throw e;
       }
     }
@@ -622,7 +627,7 @@ Regras fixas:
 JSON only:
 [{"handle":"sem_arroba","name":"Nome","text":"comentário"}]`;
 
-  let text = await jetStyleGenerate(prompt, DEFAULT_AI_MODEL, onProgress);
+  let text = await jetStyleGenerate(prompt, COMMENTS_AI_MODEL, onProgress, { responseMimeType: 'application/json' });
   text = String(text || '').trim();
   const a = text.indexOf('[');
   const b = text.lastIndexOf(']');
@@ -830,7 +835,7 @@ async function aiCommentRegenOne(i) {
     const prompt = `1 comentário (máx 120 chars) como @${d.handle} (${d.name}) no post de @${post.handle}: "${(post.caption || '').slice(0, 300)}".
 ${toneLine}
 Sem meta de RPG/IA. Sem aspas. Só o texto.`;
-    let textOut = await jetStyleGenerate(prompt);
+    let textOut = await jetStyleGenerate(prompt, COMMENTS_AI_MODEL);
     d.text = String(textOut || '').trim().replace(/^["'«»]|["'«»]$/g, '').slice(0, 240);
     renderAiCommentsList();
   } catch (e) {
