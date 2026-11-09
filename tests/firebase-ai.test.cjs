@@ -7,7 +7,7 @@ const path = require('node:path');
 function harness({ failures = {}, tokenError, initError, tokenPending, modelPending, emptyResponse } = {}) {
   const source = fs.readFileSync(path.join(__dirname, '../js/features/firebase-ai.js'), 'utf8')
     .replace(/^import .*;\r?\n/gm, '').split('function normalizeHandleLocal')[0];
-  const calls = { init: 0, events: [], models: [], options: [], requests: [], signals: [], timers: new Map() };
+  const calls = { init: 0, events: [], models: [], options: [], appCheckOptions: [], requests: [], signals: [], timers: new Map() };
   let timerId = 0;
   const context = vm.createContext({
     AbortController,
@@ -15,23 +15,23 @@ function harness({ failures = {}, tokenError, initError, tokenPending, modelPend
     clearTimeout: id => calls.timers.delete(id),
     console: { warn() {} },
     initializeApp: () => ({}),
-    initializeAppCheck: () => {
+    initializeAppCheck: (_app, options) => {
+      calls.appCheckOptions.push(options);
       calls.init++;
       if (initError && calls.init === 1) throw initError;
       return {};
     },
     ReCaptchaEnterpriseProvider: function(key) { assert.match(key, /^6L/); },
-    getToken: async () => {
-      calls.events.push('token');
-      if (tokenError) throw tokenError;
-      if (tokenPending) return new Promise(() => {});
-      return { token: 'mock' };
-    },
+    getToken: () => { throw new Error('Não deve solicitar token comum antes do token de uso único'); },
     GoogleAIBackend: function() {},
     getAI: (_app, options) => { calls.options.push(options); return {}; },
     getGenerativeModel: (_ai, { model }, options) => ({ generateContent: async (_prompt, request) => {
       calls.requests.push(options);
       calls.signals.push(request.signal);
+      // O SDK solicita o token de uso único dentro de generateContent.
+      calls.events.push('token');
+      if (tokenError) throw tokenError;
+      if (tokenPending) return new Promise(() => {});
       calls.events.push('generate');
       calls.models.push(model);
       if (failures[model]) throw typeof failures[model] === 'string' ? new Error(failures[model]) : failures[model];
@@ -53,6 +53,7 @@ test('usa Gemini 3.8 com token validado e tokens de uso único', async () => {
   assert.deepEqual(h.calls.events, ['token', 'generate', 'token', 'generate']);
   assert.deepEqual(h.calls.models, ['gemini-3.8-flash', 'gemini-3.8-flash']);
   assert.ok(h.calls.options.every(options => options.useLimitedUseAppCheckTokens === true));
+  assert.ok(h.calls.appCheckOptions.every(options => options.isTokenAutoRefreshEnabled === false));
   assert.ok(h.calls.requests.every(options => options.timeout === 30000));
   assert.equal(h.calls.timers.size, 0);
 });
@@ -94,8 +95,8 @@ test('falha de inicialização pode ser recuperada na próxima tentativa', async
 test('validação App Check pendente encerra com erro em vez de aguardar para sempre', async () => {
   const h = harness({ tokenPending: true });
   const pending = h.run();
-  const rejected = assert.rejects(pending, error => error.code === 'rg-ai/app-check-timeout' && /15 segundos/.test(h.friendly(error)));
-  h.expire(15000);
+  const rejected = assert.rejects(pending, error => error.code === 'rg-ai/request-timeout' && /35 segundos/.test(h.friendly(error)));
+  h.expire(35000);
   await rejected;
   assert.deepEqual(h.calls.models, []);
   assert.equal(h.calls.timers.size, 0);
@@ -104,7 +105,7 @@ test('validação App Check pendente encerra com erro em vez de aguardar para se
 test('geração pendente é abortada e não dispara chamadas extras', async () => {
   const h = harness({ modelPending: true });
   const pending = h.run();
-  const rejected = assert.rejects(pending, error => error.code === 'rg-ai/model-timeout');
+  const rejected = assert.rejects(pending, error => error.code === 'rg-ai/request-timeout');
   // Deixa a validação de token e seus finally terminarem.
   for (let i = 0; i < 10; i++) await Promise.resolve();
   h.expire(35000);
@@ -118,6 +119,31 @@ test('resposta vazia é um erro visível, sem repetir requisições', async () =
   const h = harness({ emptyResponse: true });
   await assert.rejects(h.run(), /resposta vazia/);
   assert.deepEqual(h.calls.models, ['gemini-3.8-flash']);
+});
+
+test('bloqueio 403 do App Check conserva o motivo e não tenta outros modelos', async () => {
+  const message = 'AppCheck: Requests throttled due to previous 403 error. Attempts allowed again after 23h:59m:22s (appCheck/throttled).';
+  const h = harness({ tokenError: new Error(message) });
+  await assert.rejects(h.run(), /403/);
+  assert.deepEqual(h.calls.events, ['token']);
+  assert.deepEqual(h.calls.models, []);
+  assert.match(h.friendly(message), /23h:59m:22s/);
+  assert.ok(!h.friendly(message).includes('localhost'));
+});
+
+test('todas as gerações compartilham trava, liberada ao encerrar a tentativa', async () => {
+  const h = harness({ modelPending: true });
+  const pending = h.run();
+  const rejected = assert.rejects(pending, error => error.code === 'rg-ai/request-timeout');
+  await assert.rejects(h.run(), error => error.code === 'rg-ai/busy');
+  assert.equal(h.calls.models.length, 1);
+  h.expire(35000);
+  await rejected;
+  const next = h.run();
+  const nextRejected = assert.rejects(next, error => error.code === 'rg-ai/request-timeout');
+  assert.equal(h.calls.models.length, 2);
+  h.expire(35000);
+  await nextRejected;
 });
 
 test('timeout abortado pelo SDK permite tentar Flash-Lite', async () => {
