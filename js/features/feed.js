@@ -735,6 +735,7 @@ function openMesaControlsModal(postId) {
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
         <button type="button" class="btn btn-primary btn-sm" onclick="openAiCommentsReview('${p.id}', 3, false); closeMesaControlsModal()">✦ IA comentários</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="openManualCommentsReview('${p.id}'); closeMesaControlsModal()">✎ Comentários manuais</button>
       </div>
       <div class="apt-row">
         <label>Como</label>

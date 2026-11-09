@@ -537,6 +537,31 @@ function getAiCommentsTone() {
   return (el?.value || '').trim();
 }
 
+async function openManualCommentsReview(postId) {
+  await openAiCommentsReview(postId, 3, false);
+  if (window.__rgAiCommentsPostId !== postId || !document.getElementById('ai-comments-modal')?.classList.contains('open')) return;
+  addManualCommentDrafts(3);
+}
+
+function addManualCommentDrafts(count = 1) {
+  if (typeof isUserAdmin === 'function' && !isUserAdmin()) return;
+  // Invalidate a pending AI result so it cannot overwrite handwritten drafts.
+  aiCommentsRequestId++;
+  aiCommentsBusy = false;
+  const drafts = window.__rgAiComments || (window.__rgAiComments = []);
+  for (let i = 0; i < Math.max(1, Math.min(8, Number(count) || 1)); i++) {
+    drafts.push({ id: 'manual_' + Date.now() + '_' + drafts.length,
+      handle: '', name: '', text: '', keep: true, manual: true });
+  }
+  const generate = document.getElementById('ai-comments-generate');
+  const publish = document.getElementById('ai-comments-publish');
+  if (generate) generate.disabled = false;
+  if (publish) publish.disabled = false;
+  const status = document.getElementById('ai-comments-status');
+  if (status) status.textContent = 'Preencha @, nome e texto. Nenhuma conta será criada.';
+  renderAiCommentsList();
+}
+
 function setAiCommentsTone(tone) {
   const el = document.getElementById('aic-tone');
   if (el) el.value = tone;
@@ -699,7 +724,7 @@ function ensureAiCommentsModal() {
     <div class="modal-sheet aic-sheet" onclick="event.stopPropagation()">
       <div class="aic-head">
         <div>
-          <h3>Comentários IA</h3>
+          <h3>Rascunhos de comentários</h3>
           <p class="aic-sub" id="ai-comments-status">defina o tom e gere</p>
         </div>
         <button type="button" class="icon-btn" onclick="closeAiCommentsModal()" title="Fechar">✕</button>
@@ -730,6 +755,7 @@ function ensureAiCommentsModal() {
             <input type="number" class="input input-sm aic-count" id="aic-count" min="1" max="8" value="3"/>
           </label>
           <button type="button" class="btn btn-primary btn-sm" id="ai-comments-generate" onclick="runAiCommentsGenerate()">✦ Gerar com este tom</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addManualCommentDrafts()">✎ Escrever manualmente</button>
         </div>
       </div>
       <div class="aic-toolbar">
@@ -763,7 +789,7 @@ function renderAiCommentsList() {
 
   list.innerHTML = drafts.map((d, i) => {
     let whoControl;
-    if (mode === 'registered') {
+    if (mode === 'registered' && !d.manual) {
       whoControl = `<select class="input input-sm aic-handle" onchange="aiCommentSetHandle(${i}, this.value)">
           ${regPool.map(p =>
             `<option value="${escapeHTMLSafe(p.handle)}" ${p.handle === d.handle ? 'selected' : ''}>@${escapeHTMLSafe(p.handle)}</option>`
@@ -793,7 +819,7 @@ function renderAiCommentsList() {
         oninput="aiCommentSetText(${i}, this.value)">${escapeHTMLSafe(d.text)}</textarea>
       <div class="aic-card-foot">
         <span class="aic-chars">${(d.text || '').length}/240</span>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentRegenOne(${i})">↻ este</button>
+        ${d.manual ? '<span class="hint">Escrito por você</span>' : `<button type="button" class="btn btn-ghost btn-sm" onclick="aiCommentRegenOne(${i})">↻ este</button>`}
       </div>
     </div>`;
   }).join('');
@@ -816,7 +842,7 @@ function aiCommentSetHandle(i, handle) {
   const d = window.__rgAiComments[i];
   if (!d) return;
   d.handle = normalizeHandleLocal(handle);
-  if (getAiNpcMode() === 'registered') {
+  if (getAiNpcMode() === 'registered' && !d.manual) {
     const pool = getRegisteredNpcPool().find(p => p.handle === d.handle)
       || getFallbackNpcPool().find(p => p.handle === d.handle);
     if (pool) d.name = pool.name;
@@ -880,6 +906,10 @@ async function publishAiComments() {
     if (typeof showToast === 'function') showToast('Nenhum comentário selecionado.', 'err');
     return;
   }
+  if (selected.some(d => !normalizeHandleLocal(d.handle))) {
+    if (typeof showToast === 'function') showToast('Preencha o @ de cada comentário selecionado.', 'err');
+    return;
+  }
   const btn = document.getElementById('ai-comments-publish');
   if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
 
@@ -899,7 +929,7 @@ async function publishAiComments() {
         avatar: av,
         createdAt: Date.now() - Math.floor(Math.random() * 20 * 60000),
         bot: true,
-        ai: true
+        ai: !d.manual
       });
       // notifica dono do post (player) + menções
       if (typeof pushNotification === 'function' && post && post.uid && !String(post.uid).startsWith('npc_')) {
@@ -932,6 +962,8 @@ window.generateBatchCaptions = generateBatchCaptions;
 window.applyBatchItem = applyBatchItem;
 window.aiReplyComment = aiReplyComment;
 window.openAiCommentsReview = openAiCommentsReview;
+window.openManualCommentsReview = openManualCommentsReview;
+window.addManualCommentDrafts = addManualCommentDrafts;
 window.runAiCommentsGenerate = runAiCommentsGenerate;
 window.setAiCommentsTone = setAiCommentsTone;
 window.getAiCommentsTone = getAiCommentsTone;
