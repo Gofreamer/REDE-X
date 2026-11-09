@@ -191,6 +191,47 @@ function loadFullSource(context) {
     .replace(/^import .*;\r?\n/gm, ''), context);
 }
 
+test('rascunhos manuais sobrevivem a uma resposta pendente de IA e não fazem chamada nova', async () => {
+  const elements = Object.fromEntries(['ai-comments-list', 'ai-comments-status', 'ai-comments-generate', 'ai-comments-publish']
+    .map(id => [id, { innerHTML: '', textContent: '', disabled: false }]));
+  let finish;
+  const context = vm.createContext({ window: {}, state: { posts: [{ id: 'p1' }] },
+    document: { getElementById: id => elements[id] || null }, console, isUserAdmin: () => true });
+  loadFullSource(context);
+  context.window.__rgAiCommentsPostId = 'p1';
+  context.window.__rgAiComments = [];
+  context.generateAiCommentDrafts = () => new Promise(resolve => { finish = resolve; });
+  const pending = context.runAiCommentsGenerate();
+  context.addManualCommentDrafts(3);
+  assert.equal(context.window.__rgAiComments.length, 3);
+  assert.ok(context.window.__rgAiComments.every(d => d.manual && !d.text && !d.handle));
+  finish([{ text: 'resposta atrasada' }]);
+  await pending;
+  assert.equal(context.window.__rgAiComments.length, 3);
+  assert.match(elements['ai-comments-list'].innerHTML, /Escrito por você/);
+  assert.equal(elements['ai-comments-publish'].disabled, false);
+});
+
+test('publicação manual grava só comentários sem criar contas ou perfis e exige handle', async () => {
+  const writes = [];
+  const context = vm.createContext({ window: {}, state: { posts: [{ id: 'p1', uid: 'npc_post' }] },
+    document: { getElementById: () => null }, console, showToast() {},
+    db: { ref: path => ({ push: async value => { writes.push({ path, value }); },
+      once: async () => ({ exists: () => true, val: () => ({ c1: {} }) }), set: async () => {} }) } });
+  loadFullSource(context);
+  context.window.__rgAiCommentsPostId = 'p1';
+  context.window.__rgAiComments = [{ keep: true, manual: true, handle: '', text: 'Texto meu', name: 'Pessoa' }];
+  await context.publishAiComments();
+  assert.equal(writes.length, 0);
+  context.window.__rgAiComments[0].handle = '@vizinho';
+  await context.publishAiComments();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, 'posts/p1/comments');
+  assert.equal(writes[0].value.uid, 'npc_vizinho');
+  assert.equal(writes[0].value.ai, false);
+  assert.equal(writes[0].value.text, 'Texto meu');
+});
+
 test('comentários usam Flash-Lite e pedem JSON, sem depender primeiro do 3.8', async () => {
   const context = vm.createContext({ window: {}, state: {}, document: { getElementById: () => null } });
   loadFullSource(context);
