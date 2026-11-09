@@ -10,7 +10,7 @@ function renderFeed() {
 
   const now = Date.now();
   const session = state.siteSettings?.session || {};
-  let posts = [...state.posts].filter(p => !p.publishAt || p.publishAt <= now || isUserAdmin());
+  let posts = state.posts.filter(p => p.profileOnly !== true && (!p.publishAt || p.publishAt <= now || isUserAdmin()));
 
   if (state.feedFilter === 'following') {
     posts = posts.filter(p => isFollowing(p.handle) || (state.profile && normalizeHandle(p.handle) === normalizeHandle(state.profile.handle)));

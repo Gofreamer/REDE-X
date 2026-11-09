@@ -562,6 +562,17 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 }
 .compose-preview img { width: 100%; height: 100%; object-fit: cover; }
 
+.compose-profile-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.compose-profile-option input { flex: 0 0 auto; width: auto; margin-top: 3px; }
+.compose-profile-option small { display: block; margin-top: 4px; color: var(--muted); }
+
 .post-sheet {
   max-width: 960px;
   width: min(960px, 96vw);

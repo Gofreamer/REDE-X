@@ -13,6 +13,7 @@ HTML + CSS + JS · Firebase Auth · Realtime Database (projeto `rede-x`)
 
 ## Features
 - Feed visual (imagem obrigatória)
+- Opção “Publicar só no perfil” ao postar: fora de “Para você”, “Seguindo” e feeds de hashtags; continua visível no perfil e pelo link da publicação. Desmarcada por padrão, inclusive para NPCs. Posts antigos seguem aparecendo normalmente.
 - Stories (24h, admin) + lista de viewers (só admin vê)
 - Curtir (duplo clique na foto)
 - Comentários (players comentam em posts de NPC)

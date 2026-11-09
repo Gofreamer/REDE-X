@@ -73,7 +73,7 @@ function updateChrome() {
   if (typeof renderRightRail === 'function') renderRightRail();
 }
 
-async function createPost({ caption, image, asHandle, asName, publishAt }) {
+async function createPost({ caption, image, asHandle, asName, publishAt, profileOnly = false }) {
   if (!state.user || !state.profile) return false;
   const img = (image || '').trim();
   if (!img) {
@@ -104,6 +104,7 @@ async function createPost({ caption, image, asHandle, asName, publishAt }) {
     comments: {},
     commentCount: 0,
     pinned: false,
+    profileOnly: profileOnly === true,
     createdAt: now
   };
   if (publishAt && Number(publishAt) > now) {

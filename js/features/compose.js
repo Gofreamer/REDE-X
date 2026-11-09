@@ -37,7 +37,8 @@ async function submitCompose(e) {
   const asHandle = document.getElementById('compose-as')?.value || '';
   const asName = document.getElementById('compose-as-name')?.value || '';
 
-  const opts = { image, caption };
+  const profileOnly = document.getElementById('compose-profile-only')?.checked === true;
+  const opts = { image, caption, profileOnly };
   if (asHandle.trim() && isUserAdmin()) {
     opts.asHandle = asHandle;
     opts.asName = asName || asHandle;
@@ -45,7 +46,7 @@ async function submitCompose(e) {
 
   const ok = await createPost(opts);
   if (ok) {
-    showToast('No ar.');
+    showToast(profileOnly ? 'Publicado só no perfil.' : 'No ar.');
     closeCompose();
     e.target.reset?.();
     document.getElementById('compose-form')?.reset();
