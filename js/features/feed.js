@@ -69,9 +69,11 @@ function skeletonFeedHTML() {
 }
 
 function setFeedFilter(mode) {
+  saveNavigationScroll();
   state.feedFilter = mode;
   if (mode !== 'tag') state.feedTag = null;
   renderFeed();
+  recordNavigation();
 }
 
 function filterByTag(tag) {
@@ -190,13 +192,12 @@ async function postMenu(id) {
   if (ok) deletePost(id);
 }
 
-async function openPostModal(id) {
+async function openPostModal(id, recordHistory = true) {
+  saveNavigationScroll();
   state.activePost = id;
   document.getElementById('post-modal')?.classList.add('open');
   document.body.classList.add('post-modal-open');
-  if (location.hash !== '#post/' + id) {
-    history.replaceState(null, '', '#post/' + id);
-  }
+  if (recordHistory) recordNavigation();
   // garante post em memória (feed, perfil ou fetch)
   let p = typeof getPostFromMemory === 'function' ? getPostFromMemory(id) : (state.posts || []).find(x => x.id === id);
   if (!p) {
@@ -210,14 +211,13 @@ async function openPostModal(id) {
   renderPostModal(id);
 }
 
-function closePostModal() {
+function closePostModal(recordHistory = true) {
+  if (recordHistory && goBackInApp()) return;
   state.activePost = null;
   state.replyTo = null;
   document.getElementById('post-modal')?.classList.remove('open');
   document.body.classList.remove('post-modal-open');
-  if ((location.hash || '').startsWith('#post/')) {
-    history.replaceState(null, '', location.pathname + location.search);
-  }
+  if (recordHistory) recordNavigation();
 }
 
 function buildCommentTree(comments) {

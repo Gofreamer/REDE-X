@@ -210,8 +210,10 @@ function formatCount(n) {
 }
 
 function setProfileTab(tab) {
+  saveNavigationScroll();
   state.profileTab = tab === 'saved' ? 'saved' : 'posts';
   renderProfile();
+  recordNavigation();
 }
 
 function openEditProfile() {

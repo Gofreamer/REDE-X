@@ -1,6 +1,7 @@
 /* Rede Global — Search & public profiles */
 
 function openSearch() {
+  saveNavigationScroll();
   document.getElementById('search-modal')?.classList.add('open');
   const input = document.getElementById('search-input');
   if (input) {
@@ -8,9 +9,13 @@ function openSearch() {
     input.focus();
   }
   renderSearchResults('');
+  state.navigationOverlay = 'search';
+  recordNavigation();
 }
 
-function closeSearch() {
+function closeSearch(recordHistory = true) {
+  if (recordHistory && state.navigationOverlay === 'search' && goBackInApp()) return;
+  if (state.navigationOverlay === 'search') state.navigationOverlay = null;
   document.getElementById('search-modal')?.classList.remove('open');
 }
 
@@ -97,7 +102,7 @@ function renderSearchResults(query) {
 }
 
 function openProfile(handle) {
-  closeSearch();
+  closeSearch(false);
   const h = normalizeHandle(handle);
   state.viewProfileHandle = h;
   state.profileTab = 'posts';
