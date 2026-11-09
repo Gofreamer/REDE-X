@@ -1,8 +1,11 @@
 function openCompose() {
+  saveNavigationScroll();
   state.composeOpen = true;
   const m = document.getElementById('compose-modal');
   if (!m) return;
   m.classList.add('open');
+  state.navigationOverlay = 'compose';
+  recordNavigation();
   // garante campos admin visíveis se for admin
   document.querySelectorAll('#compose-modal .admin-only').forEach(el => {
     el.classList.toggle('hidden', !isUserAdmin());
@@ -25,7 +28,9 @@ function openComposeAsNpc(handle, name) {
   }, 40);
 }
 
-function closeCompose() {
+function closeCompose(recordHistory = true) {
+  if (recordHistory && state.navigationOverlay === 'compose' && goBackInApp()) return;
+  if (state.navigationOverlay === 'compose') state.navigationOverlay = null;
   state.composeOpen = false;
   document.getElementById('compose-modal')?.classList.remove('open');
 }

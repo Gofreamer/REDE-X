@@ -81,7 +81,7 @@ function renderDmChat(thread) {
 
   return `
     <div class="dm-chat-head">
-      <button type="button" class="icon-btn mobile-only" onclick="state.activeDmId=null;renderDMs()">←</button>
+      <button type="button" class="icon-btn mobile-only" onclick="closeDm()">←</button>
       <strong>${displayHandle(other?.handle)}</strong>
       <button type="button" class="btn btn-ghost btn-sm" onclick="openProfile('${escapeHTML(other?.handle || '')}')">Perfil</button>
       ${isUserAdmin() || true ? `<button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deleteDmThread('${thread.id}')">Apagar</button>` : ''}
@@ -104,12 +104,20 @@ function renderDmChat(thread) {
 }
 
 function selectDm(id) {
+  saveNavigationScroll();
   state.activeDmId = id;
   renderDMs();
+  recordNavigation();
   setTimeout(() => {
     const box = document.getElementById('dm-messages');
     if (box) box.scrollTop = box.scrollHeight;
   }, 50);
+}
+
+function closeDm() {
+  if (goBackInApp()) return;
+  state.activeDmId = null;
+  renderDMs();
 }
 
 async function submitDm(e, threadId) {
