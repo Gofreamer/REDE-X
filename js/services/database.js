@@ -113,7 +113,18 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
   }
 
   try {
-    const ref = await db.ref('posts').push(post);
+    const saveManagedImage = isUserAdmin() && isManagedPostImage(img);
+    let ref;
+    if (saveManagedImage) {
+      ref = db.ref('posts').push();
+      const saved = db.ref('mediaLibrary').push();
+      await db.ref().update({
+        ['posts/' + ref.key]: post,
+        ['mediaLibrary/' + saved.key]: { url: img, label: handle.slice(0, 40), createdAt: now, sourcePostId: ref.key }
+      });
+    } else {
+      ref = await db.ref('posts').push(post);
+    }
     // Índice leve por autor (histórico de perfil, fora da janela do feed)
     try {
       await indexPostByAuthor(ref.key, post);
@@ -125,7 +136,7 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
     } catch (notifyErr) {
       console.warn('post mentions', notifyErr);
     }
-    if (isUserAdmin() && img) {
+    if (isUserAdmin() && img && !saveManagedImage) {
       try { await saveMediaUrl(img, handle); } catch (_) {}
     }
     // se o perfil desse autor estiver aberto, recarrega a grade
@@ -154,14 +165,20 @@ async function deletePost(id) {
     showToast('Sem permissão.', 'err');
     return;
   }
-  const ok = await rgConfirm({ title: 'Apagar post', body: 'Remover esta publicação?', confirmLabel: 'Apagar', danger: true });
+  const managedImage = isManagedPostImage(post.image);
+  const body = managedImage
+    ? 'Remover esta publicação? Se a foto não estiver em uso, ela também será apagada do R2.'
+    : 'Remover esta publicação?';
+  const ok = await rgConfirm({ title: 'Apagar post', body, confirmLabel: 'Apagar', danger: true });
   if (!ok) return;
   try {
     const authorKey = authorKeyFromPost(post);
     const updates = {};
     updates['posts/' + id] = null;
     if (authorKey) updates['postsByAuthor/' + authorKey + '/' + id] = null;
-    await db.ref().update(updates);
+    const result = managedImage
+      ? await removeManagedImageItem('posts', id)
+      : (await db.ref().update(updates), null);
     // limpa caches locais
     if (state.postCache && state.postCache[id]) delete state.postCache[id];
     if (state.profilePosts && Array.isArray(state.profilePosts.items)) {
@@ -172,10 +189,66 @@ async function deletePost(id) {
     }
     if (state.activePost === id) closePostModal();
     if (state.currentView === 'profile') renderProfile();
-    showToast('Removido.');
+    showImageRemovalResult(result, 'Post apagado.');
   } catch (e) {
     console.error(e);
-    showToast('Erro ao apagar.', 'err');
+    showToast(e.message || 'Erro ao apagar.', 'err');
+  }
+}
+
+function isManagedPostImage(value) {
+  if (!value || typeof location === 'undefined') return false;
+  try {
+    const url = new URL(value, location.origin);
+    return url.origin === location.origin && /^\/media\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function showImageRemovalResult(result, message) {
+  if (result === 'released') return showToast(`${message} Foto apagada e espaço liberado.`);
+  if (result === 'retained') return showToast(`${message} O arquivo foi mantido.`);
+  if (result === 'pending') return showToast(`${message} A limpeza da foto será tentada ao reabrir o site.`);
+  showToast(message);
+}
+
+function readImageRemovalQueue(uid) {
+  try { return JSON.parse(localStorage.getItem('rede-x:limpeza-r2:' + uid)) || {}; }
+  catch { return {}; }
+}
+
+async function removeManagedImageItem(target, id) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Entre na sua conta para apagar a imagem.');
+  const key = `${target}/${id}`;
+  const remember = pending => {
+    try {
+      const queue = readImageRemovalQueue(user.uid);
+      if (pending) queue[key] = { target, id };
+      else delete queue[key];
+      localStorage.setItem('rede-x:limpeza-r2:' + user.uid, JSON.stringify(queue));
+    } catch (_) {}
+  };
+  remember(true);
+  const response = await fetch('/api/post-image', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'X-Delete-From': target, 'X-Delete-Id': id },
+    signal: AbortSignal.timeout(25000)
+  });
+  const data = await response.json().catch(() => null);
+  if (response.ok && data?.result) {
+    if (data.result !== 'pending') remember(false);
+    return data.result;
+  }
+  if ([400, 401, 403, 404, 409].includes(response.status)) remember(false);
+  throw new Error(data?.error || 'Não foi possível apagar. Tente novamente.');
+}
+
+async function retryManagedImageRemovals(uid) {
+  for (const { target, id } of Object.values(readImageRemovalQueue(uid))) {
+    if (auth.currentUser?.uid !== uid) break;
+    try { await removeManagedImageItem(target, id); } catch (_) {}
   }
 }
 
@@ -786,9 +859,16 @@ async function saveMediaUrl(url, label) {
 async function deleteMediaItem(id) {
   if (!isUserAdmin()) return;
   try {
-    await db.ref('mediaLibrary/' + id).remove();
+    const item = (state.mediaLibrary || []).find(media => media.id === id);
+    if (isManagedPostImage(item?.url)) {
+      const confirmed = await rgConfirm({ title: 'Apagar da biblioteca', body: 'Se a foto não estiver em uso, o arquivo também será apagado do R2.', confirmLabel: 'Apagar', danger: true });
+      if (!confirmed) return;
+      showImageRemovalResult(await removeManagedImageItem('mediaLibrary', id), 'Removido da biblioteca.');
+    } else {
+      await db.ref('mediaLibrary/' + id).remove();
+    }
   } catch (e) {
-    showToast('Erro.', 'err');
+    showToast(e.message || 'Erro ao apagar.', 'err');
   }
 }
 
