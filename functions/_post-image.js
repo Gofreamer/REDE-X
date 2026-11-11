@@ -9,6 +9,22 @@ export const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
 export const maxImageBytes = 8 * 1024 * 1024;
 export const imageKey = id => `images/${id}`;
 
+// Reserve the maximum number of R2 operations a request can perform. The
+// caps leave room even if a billing period overlaps several UTC months.
+export async function reserveImageOperations(db, writes, reads) {
+  const month = new Date().toISOString().slice(0, 7);
+  const accepted = await db.prepare(`
+    INSERT INTO post_image_usage (month, class_a, class_b) VALUES (?1, ?2, ?3)
+    ON CONFLICT (month) DO UPDATE SET
+      class_a = class_a + excluded.class_a,
+      class_b = class_b + excluded.class_b
+    WHERE class_a + excluded.class_a <= 200000
+      AND class_b + excluded.class_b <= 3000000
+    RETURNING month
+  `).bind(month, writes, reads).first();
+  return Boolean(accepted);
+}
+
 function decodePart(part) {
   return Uint8Array.from(atob(part.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 }
