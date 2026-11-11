@@ -9,6 +9,21 @@ export const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
 export const maxImageBytes = 8 * 1024 * 1024;
 export const imageKey = id => `images/${id}`;
 
+export function managedImageId(value, origin) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value, origin);
+    const id = url.pathname.startsWith('/media/') && url.pathname.slice(7);
+    return url.origin === origin && uploadIdPattern.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function imageRelease(db, id) {
+  return db.prepare('SELECT bytes, released FROM post_image_releases WHERE id = ?').bind(id).first();
+}
+
 // Reserve the maximum number of R2 operations a request can perform. The
 // caps leave room even if a billing period overlaps several UTC months.
 export async function reserveImageOperations(db, writes, reads) {
@@ -103,7 +118,7 @@ export async function readImage(request, type) {
 
 // Conditional writes serialize reservations across isolates. A failed upload
 // retains its reservation so a retry with the same ID never uses quota twice.
-export async function reserveImageSpace(bucket, id, uid, size) {
+export async function reserveImageSpace(bucket, id, uid, size, releasedBytes = 0) {
   const path = 'internal/upload-quota.json';
   const day = new Date().toISOString().slice(0, 10);
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -116,7 +131,7 @@ export async function reserveImageSpace(bucket, id, uid, size) {
     const reservation = Object.hasOwn(quota.uploads, id) && quota.uploads[id];
     if (reservation) return reservation.uid === uid && reservation.size === size ? 'ok' : 'conflict';
     const today = Object.values(quota.uploads);
-    if (quota.bytes + size > 8_000_000_000) return 'capacity';
+    if (Math.max(0, quota.bytes - releasedBytes) + size > 8_000_000_000) return 'capacity';
     if (today.length >= 300 || today.filter(upload => upload.uid === uid).length >= 20) return 'daily';
     quota.bytes += size;
     quota.uploads[id] = { uid, size };
