@@ -14,6 +14,7 @@ auth.onAuthStateChanged(user => {
     listenFollowing(user.uid);
     listenMediaLibrary();
     listenSaves(user.uid);
+    retryManagedImageRemovals(user.uid);
     initializeNavigation();
   } else {
     state.user = null;
