@@ -85,7 +85,13 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
       return object;
     }
   };
-  const env = { POST_IMAGES: bucket };
+  let allowOperations = true;
+  let reservedOperations;
+  const usage = { prepare: () => ({ bind: (_month, ...operations) => ({ first: async () => {
+    reservedOperations = operations;
+    return allowOperations ? { month: 'this-month' } : null;
+  } }) }) };
+  const env = { POST_IMAGES: bucket, POST_IMAGE_USAGE: usage };
   const upload = (jwt, body = png, uploadId = id) => onRequestPost({ env, request: new Request(`${origin}/api/post-image`, {
     method: 'POST', body, headers: { Origin: origin, 'X-Upload-Id': uploadId, 'Content-Type': 'image/png', Authorization: `Bearer ${jwt}` }
   }) });
@@ -101,11 +107,17 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
   assert.deepEqual(await (await upload(jwt)).json(), { url: `${origin}/media/${id}` });
   assert.equal((await upload(await token('rede-x', 'outro-player'))).status, 409);
   assert.equal(writes, 2);
+  assert.deepEqual(reservedOperations, [4, 5]);
+  allowOperations = false;
+  assert.equal((await upload(jwt, png, crypto.randomUUID())).status, 429);
+  assert.equal(writes, 2);
+  allowOperations = true;
 
   globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
   t.after(() => { delete globalThis.caches; });
   const image = await getImage({ env, params: { id }, request: new Request(`${origin}/media/${id}`), waitUntil() {} });
   assert.equal(image.headers.get('Content-Type'), 'image/png');
   assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
+  assert.deepEqual(reservedOperations, [0, 1]);
   assert.equal((await getImage({ env, params: { id: '../internal/upload-quota.json' } })).status, 404);
 });
