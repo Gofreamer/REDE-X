@@ -176,9 +176,19 @@
       </div>
       <form id="compose-form" onsubmit="submitCompose(event)">
         <div id="compose-preview" class="compose-preview"><span class="text-muted">Prévia da imagem</span></div>
-        <label class="field"><span>URL da imagem</span>
+        <label class="field"><span>Colar link da imagem</span>
           <input type="url" id="compose-image" required placeholder="https://…" oninput="previewComposeImage()"/>
         </label>
+        <div id="compose-upload" class="hidden">
+          <label class="field"><span>Ou enviar imagem</span>
+            <input type="file" id="compose-file" accept="image/jpeg,image/png,image/webp" onchange="prepareComposeImage()"/>
+          </label>
+          <label class="compose-profile-option hidden" id="compose-original-option">
+            <input type="checkbox" id="compose-original" onchange="prepareComposeImage()"/>
+            <span>Manter original</span>
+          </label>
+          <p id="compose-upload-status" class="hint" role="status"></p>
+        </div>
         <label class="field"><span>Legenda</span>
           <textarea id="compose-caption" rows="3" maxlength="500" placeholder="O que está rolando na cidade?"></textarea>
         </label>
@@ -257,7 +267,7 @@
   <script src="./js/services/auth.js"></script>
   <script src="./js/services/database.js"></script>
   <script src="./js/features/feed.js?v=20261109-manual"></script>
-  <script src="./js/features/compose.js"></script>
+  <script src="./js/features/compose.js?v=post-image-1"></script>
   <script src="./js/features/search.js"></script>
   <script src="./js/features/notifications.js"></script>
   <script src="./js/features/dms.js"></script>

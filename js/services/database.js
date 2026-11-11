@@ -120,7 +120,11 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
     } catch (idxErr) {
       console.warn('postsByAuthor index', idxErr);
     }
-    await notifyMentions(text, ref.key, handle);
+    try {
+      await notifyMentions(text, ref.key, handle);
+    } catch (notifyErr) {
+      console.warn('post mentions', notifyErr);
+    }
     if (isUserAdmin() && img) {
       try { await saveMediaUrl(img, handle); } catch (_) {}
     }
