@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+const { DatabaseSync } = require('node:sqlite');
 
 test('jogador pode escolher WebP, manter o arquivo original ou voltar ao link', async () => {
   const image = new Blob([Buffer.alloc(500 * 1024)], { type: 'image/png' });
@@ -52,7 +53,7 @@ test('jogador pode escolher WebP, manter o arquivo original ou voltar ao link', 
 });
 
 test('upload exige um token do Rede X e permite repetir um envio sem gravar outra imagem', async t => {
-  const { onRequestGet, onRequestPost } = await import('../functions/api/post-image.js');
+  const { onRequestGet, onRequestPost, onRequestDelete } = await import('../functions/api/post-image.js');
   const { onRequestGet: getImage } = await import('../functions/media/[id].js');
   const origin = 'https://rede-x.pages.dev';
   const id = crypto.randomUUID();
@@ -60,9 +61,24 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
   const rsa = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
   const pair = await crypto.subtle.generateKey({ ...rsa, modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) }, true, ['sign', 'verify']);
   const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
-  t.mock.method(globalThis, 'fetch', async () => Response.json({ keys: [{ ...jwk, kid: 'test-key' }] }, {
-    headers: { 'Cache-Control': 'max-age=60' }
-  }));
+  const records = { posts: {}, mediaLibrary: {}, users: { admin: { isAdmin: true } } };
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (new URL(url).hostname === 'www.googleapis.com') {
+      return Response.json({ keys: [{ ...jwk, kid: 'test-key' }] }, { headers: { 'Cache-Control': 'max-age=60' } });
+    }
+    assert.equal(new URL(url).hostname, 'rede-x-default-rtdb.firebaseio.com');
+    if (options.method === 'PATCH') {
+      for (const name of Object.keys(JSON.parse(options.body))) {
+        const parts = name.split('/');
+        const key = parts.pop();
+        const parent = parts.reduce((value, part) => value?.[part], records);
+        if (parent) delete parent[key];
+      }
+      return Response.json(null);
+    }
+    const route = new URL(url).pathname.slice(1, -5);
+    return Response.json(route.split('/').reduce((value, part) => value?.[part], records) ?? null);
+  });
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const token = async (aud, uid = 'player') => {
     const now = Math.floor(Date.now() / 1000);
@@ -73,9 +89,14 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
 
   const objects = new Map();
   let writes = 0;
+  let failedDelete = false;
   const bucket = {
     head: async key => objects.get(key),
     get: async key => objects.get(key),
+    async delete(key) {
+      objects.delete(key);
+      if (failedDelete) throw new Error('R2 did not acknowledge the deletion');
+    },
     async put(key, value, options) {
       const current = objects.get(key);
       if (options.onlyIf instanceof Headers && options.onlyIf.get('If-None-Match') === '*' && current) return null;
@@ -87,10 +108,23 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
   };
   let allowOperations = true;
   let reservedOperations;
-  const usage = { prepare: () => ({ bind: (_month, ...operations) => ({ first: async () => {
-    reservedOperations = operations;
-    return allowOperations ? { month: 'this-month' } : null;
-  } }) }) };
+  const sqlite = new DatabaseSync(':memory:');
+  t.after(() => sqlite.close());
+  for (const name of ['post-image-usage.sql', 'post-image-deletion.sql']) {
+    sqlite.exec(fs.readFileSync(path.join(__dirname, '../sql', name), 'utf8'));
+  }
+  const usage = { prepare: sql => {
+    const statement = sqlite.prepare(sql.replace(/\?\d+/g, '?'));
+    const execute = (method, args) => {
+      if (sql.includes('INSERT INTO post_image_usage')) {
+        reservedOperations = args.slice(1);
+        if (!allowOperations) return null;
+      }
+      return statement[method](...args);
+    };
+    const bind = (...args) => ({ first: async () => execute('get', args), run: async () => execute('run', args) });
+    return { bind, ...bind() };
+  } };
   const env = { POST_IMAGES: bucket, POST_IMAGE_USAGE: usage };
   const upload = (jwt, body = png, uploadId = id) => onRequestPost({ env, request: new Request(`${origin}/api/post-image`, {
     method: 'POST', body, headers: { Origin: origin, 'X-Upload-Id': uploadId, 'Content-Type': 'image/png', Authorization: `Bearer ${jwt}` }
@@ -113,11 +147,47 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
   assert.equal(writes, 2);
   allowOperations = true;
 
-  globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
+  globalThis.caches = { default: { match: async () => undefined, put: async () => {}, delete: async () => {} } };
   t.after(() => { delete globalThis.caches; });
   const image = await getImage({ env, params: { id }, request: new Request(`${origin}/media/${id}`), waitUntil() {} });
   assert.equal(image.headers.get('Content-Type'), 'image/png');
   assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
   assert.deepEqual(reservedOperations, [0, 1]);
   assert.equal((await getImage({ env, params: { id: '../internal/upload-quota.json' } })).status, 404);
+
+  const remove = (jwt, target, key) => onRequestDelete({ env, waitUntil() {}, request: new Request(`${origin}/api/post-image`, {
+    method: 'DELETE', headers: { Origin: origin, Authorization: `Bearer ${jwt}`, 'X-Delete-From': target, 'X-Delete-Id': key }
+  }) });
+  const imageUrl = `${origin}/media/${id}`;
+  records.posts.first = { uid: 'player', image: imageUrl };
+  records.posts.last = { uid: 'player', image: imageUrl };
+  records.mediaLibrary.automatic = { url: imageUrl, sourcePostId: 'first' };
+  records.mediaLibrary.manual = { url: imageUrl };
+  const admin = await token('rede-x', 'admin');
+  assert.equal((await remove(await token('rede-x', 'outsider'), 'posts', 'first')).status, 403);
+  assert.deepEqual(await (await remove(admin, 'posts', 'first')).json(), { result: 'retained' });
+  assert.equal(records.posts.first, undefined);
+  assert.equal(records.mediaLibrary.automatic, undefined);
+  assert.ok(records.mediaLibrary.manual);
+  assert.ok(objects.has(`images/${id}`));
+  assert.deepEqual(await (await remove(jwt, 'posts', 'last')).json(), { result: 'retained' });
+
+  failedDelete = true;
+  assert.deepEqual(await (await remove(admin, 'mediaLibrary', 'manual')).json(), { result: 'pending' });
+  assert.equal(sqlite.prepare('SELECT bytes FROM post_image_space').get(), undefined);
+  failedDelete = false;
+  for (let count = 0; count < 2; count++) {
+    assert.deepEqual(await (await remove(admin, 'mediaLibrary', 'manual')).json(), { result: 'released' });
+  }
+  assert.equal(objects.has(`images/${id}`), false);
+  assert.equal(sqlite.prepare('SELECT bytes FROM post_image_space').get().bytes, png.length);
+  assert.equal((await upload(jwt)).status, 409);
+
+  const quota = objects.get('internal/upload-quota.json');
+  const state = JSON.parse(quota.body);
+  state.bytes = 8_000_000_000;
+  quota.body = JSON.stringify(state);
+  quota.json = async () => JSON.parse(quota.body);
+  assert.equal((await upload(jwt, png, crypto.randomUUID())).status, 200);
+  assert.equal((await upload(jwt, png, crypto.randomUUID())).status, 507);
 });
