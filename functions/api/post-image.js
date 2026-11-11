@@ -1,16 +1,16 @@
-import { authenticatedUser, imageKey, imageTypes, readImage, reserveImageSpace, uploadIdPattern } from '../_post-image.js';
+import { authenticatedUser, imageKey, imageTypes, readImage, reserveImageOperations, reserveImageSpace, uploadIdPattern } from '../_post-image.js';
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
 export function onRequestGet({ env }) {
-  return json({ available: Boolean(env.POST_IMAGES) });
+  return json({ available: Boolean(env.POST_IMAGES && env.POST_IMAGE_USAGE) });
 }
 
 export async function onRequestPost({ request, env }) {
   const bucket = env.POST_IMAGES;
-  if (!bucket) return json({ error: 'O envio de imagens ainda não está disponível.' }, 503);
+  if (!bucket || !env.POST_IMAGE_USAGE) return json({ error: 'O envio de imagens ainda não está disponível.' }, 503);
   const origin = new URL(request.url).origin;
   if (request.headers.get('Origin') !== origin) return json({ error: 'Origem inválida.' }, 403);
   const id = request.headers.get('X-Upload-Id') || '';
@@ -22,6 +22,10 @@ export async function onRequestPost({ request, env }) {
   try {
     const uid = await authenticatedUser(request);
     if (!uid) return json({ error: 'Entre na sua conta para enviar uma imagem.' }, 401);
+    // Up to three quota checks/updates, two image checks and one image write.
+    if (!await reserveImageOperations(env.POST_IMAGE_USAGE, 4, 5)) {
+      return json({ error: 'Limite mensal de imagens atingido. Você pode publicar com link.' }, 429);
+    }
     const key = imageKey(id);
     const url = `${origin}/media/${id}`;
     const existing = await bucket.head(key);
