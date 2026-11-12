@@ -11,12 +11,15 @@ function json(body, status = 200) {
 async function database(path, token, updates) {
   const url = new URL(`/${path}.json`, firebaseDatabase);
   url.searchParams.set('auth', token);
+  if (updates) url.searchParams.set('print', 'silent');
   const response = await fetch(url, {
     method: updates ? 'PATCH' : 'GET',
     headers: updates ? { 'Content-Type': 'application/json' } : undefined,
     body: updates ? JSON.stringify(updates) : undefined,
     signal: AbortSignal.timeout(7000),
-    redirect: 'error'
+    // Workers supports manual redirects. The status check below rejects any
+    // redirect without forwarding the Firebase ID token to another URL.
+    redirect: 'manual'
   });
   if (!response.ok) throw new Error('Database request failed');
   return response;

@@ -67,7 +67,10 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
       return Response.json({ keys: [{ ...jwk, kid: 'test-key' }] }, { headers: { 'Cache-Control': 'max-age=60' } });
     }
     assert.equal(new URL(url).hostname, 'rede-x-default-rtdb.firebaseio.com');
+    // Cloudflare throws before issuing the request for the Fetch "error" mode.
+    assert.equal(options.redirect, 'manual');
     if (options.method === 'PATCH') {
+      assert.equal(new URL(url).searchParams.get('print'), 'silent');
       for (const name of Object.keys(JSON.parse(options.body))) {
         const parts = name.split('/');
         const key = parts.pop();
