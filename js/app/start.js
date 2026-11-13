@@ -12,7 +12,6 @@ auth.onAuthStateChanged(user => {
     listenNotifications(user.uid);
     listenDMs(user.uid);
     listenFollowing(user.uid);
-    listenMediaLibrary();
     listenSaves(user.uid);
     retryManagedImageRemovals(user.uid);
     initializeNavigation();
