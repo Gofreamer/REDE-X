@@ -12,7 +12,6 @@ const state = {
   activeDmId: null,
   siteSettings: {},
   following: {},
-  mediaLibrary: [],
   saves: {},          // postId -> timestamp (coleção privada do player)
   postCache: {},      // posts fora da janela do feed (perfil / link direto)
   profilePosts: {
