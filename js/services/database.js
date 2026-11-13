@@ -113,18 +113,7 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
   }
 
   try {
-    const saveManagedImage = isUserAdmin() && isManagedPostImage(img);
-    let ref;
-    if (saveManagedImage) {
-      ref = db.ref('posts').push();
-      const saved = db.ref('mediaLibrary').push();
-      await db.ref().update({
-        ['posts/' + ref.key]: post,
-        ['mediaLibrary/' + saved.key]: { url: img, label: handle.slice(0, 40), createdAt: now, sourcePostId: ref.key }
-      });
-    } else {
-      ref = await db.ref('posts').push(post);
-    }
+    const ref = await db.ref('posts').push(post);
     // Índice leve por autor (histórico de perfil, fora da janela do feed)
     try {
       await indexPostByAuthor(ref.key, post);
@@ -135,9 +124,6 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
       await notifyMentions(text, ref.key, handle);
     } catch (notifyErr) {
       console.warn('post mentions', notifyErr);
-    }
-    if (isUserAdmin() && img && !saveManagedImage) {
-      try { await saveMediaUrl(img, handle); } catch (_) {}
     }
     // se o perfil desse autor estiver aberto, recarrega a grade
     if (state.currentView === 'profile' && state.viewProfileHandle
@@ -830,20 +816,6 @@ async function setFollowingBase(uid, baseValue) {
     followingBase: base,
     followingCount: base + real
   });
-}
-
-async function saveMediaUrl(url, label) {
-  if (!isUserAdmin() || !(url || '').trim()) return;
-  try {
-    await db.ref('mediaLibrary').push({
-      url: url.trim(),
-      label: (label || '').slice(0, 40),
-      createdAt: Date.now()
-    });
-    showToast('Salvo na biblioteca.');
-  } catch (e) {
-    showToast('Erro na biblioteca.', 'err');
-  }
 }
 
 async function adminSetPostTime(postId, isoOrOffset) {

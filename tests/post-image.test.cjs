@@ -186,9 +186,55 @@ test('upload exige um token do Rede X e permite repetir um envio sem gravar outr
   assert.equal(sqlite.prepare('SELECT bytes FROM post_image_space').get().bytes, png.length);
   assert.equal((await upload(jwt)).status, 409);
 
+  const newId = crypto.randomUUID();
+  const uploadResponse = await upload(admin, png, newId);
+  assert.equal(uploadResponse.status, 200);
+  const { url: newUrl } = await uploadResponse.json();
+  const writesToFirebase = [];
+  const context = vm.createContext({
+    state: { user: { uid: 'admin' }, profile: { handle: 'mestre', name: 'Mestre' } },
+    db: {
+      ref: route => {
+        writesToFirebase.push(route);
+        assert.equal(route, 'posts');
+        return {
+          push: async post => {
+            const key = 'new' + writesToFirebase.length;
+            records.posts[key] = post;
+            return { key };
+          }
+        };
+      }
+    },
+    isUserAdmin: () => true,
+    normalizeHandle: value => value,
+    notifyMentions: async () => {},
+    showToast: () => {},
+    console
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/services/database.js'), 'utf8'), context);
+  context.indexPostByAuthor = async () => {};
+  assert.equal(await context.createPost({ image: newUrl, asHandle: 'nina' }), true);
+  assert.equal(await context.createPost({ image: 'https://example.com/photo.jpg' }), true);
+  assert.deepEqual(writesToFirebase, ['posts', 'posts']);
+  assert.deepEqual(records.mediaLibrary, {});
+  assert.equal(records.posts.new1.image, newUrl);
+  assert.equal(records.posts.new2.image, 'https://example.com/photo.jpg');
+  const publishedImage = await getImage({
+    env,
+    params: { id: newId },
+    request: new Request(records.posts.new1.image),
+    waitUntil() {}
+  });
+  assert.deepEqual(Buffer.from(await publishedImage.arrayBuffer()), png);
+  assert.deepEqual(await (await remove(admin, 'posts', 'new1')).json(), { result: 'released' });
+  assert.equal(records.posts.new1, undefined);
+  assert.equal(objects.has(`images/${newId}`), false);
+  assert.equal(sqlite.prepare('SELECT bytes FROM post_image_space').get().bytes, png.length * 2);
+
   const quota = objects.get('internal/upload-quota.json');
   const state = JSON.parse(quota.body);
-  state.bytes = 8_000_000_000;
+  state.bytes = 8_000_000_000 + png.length;
   quota.body = JSON.stringify(state);
   quota.json = async () => JSON.parse(quota.body);
   assert.equal((await upload(jwt, png, crypto.randomUUID())).status, 200);
