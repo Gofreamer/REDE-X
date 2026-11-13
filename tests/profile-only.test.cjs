@@ -20,7 +20,7 @@ test('publicação salva a escolha e mantém o índice do perfil, para player e 
     isUserAdmin: () => true,
     normalizeHandle: h => h.replace(/^@/, ''),
     indexPostByAuthor: async (id, post) => indexed.push([id, post.uid]),
-    notifyMentions: async () => {}, saveMediaUrl: async () => {},
+    notifyMentions: async () => {},
     showToast: () => {}, console
   });
   load(context, 'js/services/database.js');
