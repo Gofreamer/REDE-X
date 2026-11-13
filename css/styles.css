@@ -1622,28 +1622,6 @@ select option {
 }
 .vivo-card strong { font-size: 1.05rem; }
 
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-}
-.media-item {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  overflow: hidden;
-  background: #0d0d10;
-}
-.media-item img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-}
-.media-item-meta {
-  padding: 8px;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
 @media (max-width: 600px) {
   .vivo-grid { grid-template-columns: 1fr; }
 }
