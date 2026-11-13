@@ -15,7 +15,6 @@ function renderAdmin() {
     { id: 'mesa', label: 'Mesa' },
     { id: 'publicar', label: 'Publicar' },
     { id: 'npcs', label: 'NPCs' },
-    { id: 'midia', label: 'Mídia' },
     { id: 'ia', label: 'IA' },
     { id: 'mod', label: 'Moderação' }
   ];
@@ -33,7 +32,6 @@ function renderAdmin() {
         ${adminTab === 'mesa' ? renderAdminMesa() : ''}
         ${adminTab === 'publicar' ? renderAdminPublicar() : ''}
         ${adminTab === 'npcs' ? renderAdminNpcs() : ''}
-        ${adminTab === 'midia' ? renderAdminMidia() : ''}
         ${adminTab === 'ia' ? renderAdminIA() : ''}
         ${adminTab === 'mod' ? renderAdminMod() : ''}
       </div>
@@ -81,62 +79,6 @@ function renderAdminVivo() {
         <button type="button" class="btn btn-ghost" onclick="showView('feed')">Ver fio</button>
       </div>
     </section>`;
-}
-
-function renderAdminMidia() {
-  return `
-    <section class="panel">
-      <h3>Biblioteca de mídia</h3>
-      <p class="hint">Salve URLs pra reutilizar em posts/stories sem caçar de novo.</p>
-      <form onsubmit="adminAddMedia(event)">
-        <div class="form-group">
-          <label>URL</label>
-          <input class="input" id="media-url" type="url" required placeholder="https://…"/>
-        </div>
-        <div class="form-group">
-          <label>Rótulo</label>
-          <input class="input" id="media-label" placeholder="porto noite"/>
-        </div>
-        <button type="submit" class="btn btn-primary">Salvar</button>
-      </form>
-    </section>
-    <section class="panel">
-      <h3>Salvos (${(state.mediaLibrary||[]).length})</h3>
-      <div class="media-grid">
-        ${(state.mediaLibrary||[]).map(m => `
-          <div class="media-item">
-            <img src="${escapeHTML(m.url)}" alt="" onerror="this.style.opacity=0.3"/>
-            <div class="media-item-meta">
-              <span>${escapeHTML(m.label || 'sem rótulo')}</span>
-              <div class="apt-row">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="useMediaInPublish('${escapeHTML(m.url)}')">Usar</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${escapeHTML(m.url)}');showToast('URL copiada')">Copiar</button>
-                <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="deleteMediaItem('${m.id}')">✕</button>
-              </div>
-            </div>
-          </div>
-        `).join('') || '<p class="text-muted">Biblioteca vazia.</p>'}
-      </div>
-    </section>`;
-}
-
-async function adminAddMedia(e) {
-  e.preventDefault();
-  await saveMediaUrl(
-    document.getElementById('media-url')?.value,
-    document.getElementById('media-label')?.value
-  );
-  e.target.reset();
-}
-
-function useMediaInPublish(url) {
-  adminTab = 'publicar';
-  renderAdmin();
-  setTimeout(() => {
-    const img = document.getElementById('adm-image');
-    if (img) img.value = url;
-    showToast('Imagem no form de publicar.');
-  }, 40);
 }
 
 function renderAdminMesa() {

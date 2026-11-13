@@ -744,16 +744,6 @@ function listenFollowing(uid) {
   });
 }
 
-function listenMediaLibrary() {
-  db.ref('mediaLibrary').on('value', snap => {
-    const data = snap.val() || {};
-    state.mediaLibrary = Object.entries(data)
-      .map(([id, m]) => ({ id, ...m }))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    if (state.currentView === 'admin') renderAdmin();
-  });
-}
-
 function isFollowing(handle) {
   const h = normalizeHandle(handle);
   return !!(state.following && state.following[h]);
@@ -853,22 +843,6 @@ async function saveMediaUrl(url, label) {
     showToast('Salvo na biblioteca.');
   } catch (e) {
     showToast('Erro na biblioteca.', 'err');
-  }
-}
-
-async function deleteMediaItem(id) {
-  if (!isUserAdmin()) return;
-  try {
-    const item = (state.mediaLibrary || []).find(media => media.id === id);
-    if (isManagedPostImage(item?.url)) {
-      const confirmed = await rgConfirm({ title: 'Apagar da biblioteca', body: 'Se a foto não estiver em uso, o arquivo também será apagado do R2.', confirmLabel: 'Apagar', danger: true });
-      if (!confirmed) return;
-      showImageRemovalResult(await removeManagedImageItem('mediaLibrary', id), 'Removido da biblioteca.');
-    } else {
-      await db.ref('mediaLibrary/' + id).remove();
-    }
-  } catch (e) {
-    showToast(e.message || 'Erro ao apagar.', 'err');
   }
 }
 
