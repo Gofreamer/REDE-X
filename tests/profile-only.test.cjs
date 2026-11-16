@@ -26,10 +26,11 @@ test('publicação salva a escolha e mantém o índice do perfil, para player e 
   load(context, 'js/services/database.js');
   // Substitui apenas o acesso ao índice pelo registro de chamadas acima.
   context.indexPostByAuthor = async (id, post) => indexed.push([id, post.uid]);
-  for (const opts of [{}, { profileOnly: false }, { profileOnly: true }, { profileOnly: true, asHandle: '@nina' }]) {
+  for (const opts of [{}, { profileOnly: false }, { profileOnly: true }, { profileOnly: true, asHandle: '@nina', commentsDisabled: true }]) {
     assert.equal(await context.createPost({ image: 'https://example.com/photo.jpg', ...opts }), true);
   }
   assert.deepEqual(written.map(p => p.profileOnly), [false, false, true, true]);
+  assert.deepEqual(written.map(p => p.commentsDisabled), [undefined, undefined, undefined, true]);
   assert.deepEqual(indexed, [['p1', 'u1'], ['p2', 'u1'], ['p3', 'u1'], ['p4', 'npc_nina']]);
 });
 
@@ -75,11 +76,15 @@ test('formulário transmite a caixinha e só a limpa depois de publicar com suce
   const fields = {
     'compose-image': { value: 'https://example.com/photo.jpg' },
     'compose-caption': { value: 'Foto' },
-    'compose-profile-only': { checked: true }
+    'compose-profile-only': { checked: true },
+    'compose-comments-disabled': { checked: true }
   };
   let succeed = false;
   const submitted = [];
-  const form = { reset: () => { fields['compose-profile-only'].checked = false; } };
+  const form = { reset: () => {
+    fields['compose-profile-only'].checked = false;
+    fields['compose-comments-disabled'].checked = false;
+  } };
   const context = vm.createContext({
     state: {}, document: { getElementById: id => fields[id] || (id === 'compose-form' ? form : null) },
     createPost: async opts => { submitted.push(opts); return succeed; },
@@ -94,4 +99,5 @@ test('formulário transmite a caixinha e só a limpa depois de publicar com suce
   assert.equal(fields['compose-profile-only'].checked, false);
   await context.submitCompose(event);
   assert.deepEqual(submitted.map(p => p.profileOnly), [true, true, false]);
+  assert.deepEqual(submitted.map(p => p.commentsDisabled), [true, true, false]);
 });
