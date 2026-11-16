@@ -73,7 +73,7 @@ function updateChrome() {
   if (typeof renderRightRail === 'function') renderRightRail();
 }
 
-async function createPost({ caption, image, asHandle, asName, publishAt, profileOnly = false }) {
+async function createPost({ caption, image, asHandle, asName, publishAt, profileOnly = false, commentsDisabled = false }) {
   if (!state.user || !state.profile) return false;
   const img = (image || '').trim();
   if (!img) {
@@ -107,6 +107,7 @@ async function createPost({ caption, image, asHandle, asName, publishAt, profile
     profileOnly: profileOnly === true,
     createdAt: now
   };
+  if (commentsDisabled === true) post.commentsDisabled = true;
   if (publishAt && Number(publishAt) > now) {
     post.publishAt = Number(publishAt);
     post.scheduled = true;
@@ -289,6 +290,10 @@ async function addComment(postId, text, asNpc, replyTo = null) {
   }
   if (!state.profile) {
     showToast('Perfil ainda carregando… tente de novo.', 'err');
+    return false;
+  }
+  if (getPostFromMemory(postId)?.commentsDisabled === true) {
+    showToast('Comentários desativados neste post.', 'err');
     return false;
   }
   let body = (text || '').trim().slice(0, 240);
