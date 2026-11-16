@@ -162,7 +162,7 @@ function renderPostCard(p) {
         <button class="icon-btn ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')" aria-label="Curtir">
           ${liked ? '♥' : '♡'}
         </button>
-        <button class="icon-btn" onclick="openPostModal('${p.id}')" aria-label="Comentar">💬</button>
+        ${p.commentsDisabled !== true ? `<button class="icon-btn" onclick="openPostModal('${p.id}')" aria-label="Comentar">💬</button>` : ''}
         <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link" aria-label="Compartilhar">↗</button>
         <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}" aria-label="Salvar">
           ${saved ? '★' : '☆'}
@@ -173,7 +173,9 @@ function renderPostCard(p) {
       <div class="ig-meta">
         <div class="ig-likes">${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)} curtida${(p.likeCount || 0) === 1 ? '' : 's'}</div>
         ${p.caption ? `<div class="ig-caption"><strong>${escapeHTML(p.handle)}</strong> ${linkify(p.caption)}</div>` : ''}
-        ${(p.commentCount || 0) > 0
+        ${p.commentsDisabled === true
+          ? `<button class="ig-view-comments" onclick="openPostModal('${p.id}')">Comentários desativados</button>`
+          : (p.commentCount || 0) > 0
           ? `<button class="ig-view-comments" onclick="openPostModal('${p.id}')">Ver ${p.commentCount} comentário${p.commentCount > 1 ? 's' : ''}</button>`
           : ''}
       </div>
@@ -279,6 +281,7 @@ function renderPostModal(id) {
     root.innerHTML = '<p class="text-muted">Post não encontrado.</p>';
     return;
   }
+  const commentsDisabled = p.commentsDisabled === true;
   const comments = Object.entries(p.comments || {})
     .map(([cid, c]) => ({ id: cid, ...c }))
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -319,39 +322,41 @@ function renderPostModal(id) {
             </div>` : ''}
           ${roots.length
             ? roots.map(c => renderCommentBlock(c, p.id, byParent)).join('')
-            : '<p class="text-muted ig-comments-empty">Nenhum comentário ainda.</p>'}
+            : ''}
+          ${commentsDisabled ? '<p class="text-muted ig-comments-empty">Comentários desativados.</p>'
+            : roots.length ? '' : '<p class="text-muted ig-comments-empty">Nenhum comentário ainda.</p>'}
         </div>
         <div class="modal-footer">
           <div class="ig-actions">
             <button class="icon-btn ${liked ? 'liked' : ''}" onclick="toggleLike('${p.id}')">${liked ? '♥' : '♡'}</button>
-            <button class="icon-btn" onclick="document.getElementById('comment-input')?.focus()" title="Comentar">💬</button>
+            ${!commentsDisabled ? `<button class="icon-btn" onclick="document.getElementById('comment-input')?.focus()" title="Comentar">💬</button>` : ''}
             <button class="icon-btn" onclick="sharePost('${p.id}')" title="Copiar link">↗</button>
             <button class="icon-btn ${saved ? 'saved' : ''}" onclick="toggleSave('${p.id}')" title="${saved ? 'Remover dos salvos' : 'Salvar'}">${saved ? '★' : '☆'}</button>
             <span class="ig-likes">${typeof formatCount === 'function' ? formatCount(p.likeCount || 0) : (p.likeCount || 0)} curtidas</span>
           </div>
           ${isUserAdmin() ? `
             <div class="admin-post-bar">
-              <select id="comment-as-handle" class="input input-sm comment-as-select" title="Comentar como"
+              ${!commentsDisabled ? `<select id="comment-as-handle" class="input input-sm comment-as-select" title="Comentar como"
                 onchange="setCommentAsHandle(this.value)">
                 <option value="">comentar como eu</option>
                 ${Object.keys(state.npcProfiles || {}).map(h =>
                   `<option value="${escapeHTML(h)}" ${state.commentAsHandle === h ? 'selected' : ''}>@${escapeHTML(h)}</option>`
                 ).join('')}
-              </select>
+              </select>` : ''}
               <button type="button" class="btn btn-ghost btn-sm mesa-controls-btn" onclick="openMesaControlsModal('${p.id}')">Controles da mesa</button>
             </div>
           ` : ''}
-          ${replyTo ? `
+          ${!commentsDisabled && replyTo ? `
             <div class="ig-reply-bar">
               <span>Respondendo a <strong>@${escapeHTML(replyTo.handle)}</strong></span>
               <button type="button" class="ig-reply-cancel" onclick="cancelReply()">✕</button>
             </div>` : ''}
-          <form class="comment-form" onsubmit="submitComment(event, '${p.id}')">
+          ${!commentsDisabled ? `<form class="comment-form" onsubmit="submitComment(event, '${p.id}')">
             <input type="text" id="comment-input" maxlength="240"
               placeholder="${replyTo ? 'Responder a @' + escapeHTML(replyTo.handle) + '…' : 'Adicione um comentário…'}"
               class="input" autocomplete="off"/>
             <button type="submit" class="btn btn-ghost btn-sm comment-post-btn">Publicar</button>
-          </form>
+          </form>` : ''}
         </div>
       </div>
     </div>`;
@@ -730,7 +735,7 @@ function openMesaControlsModal(postId) {
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminSetLikes('${p.id}')">Aplicar</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateLikes('${p.id}')">+ auto</button>
       </div>
-      <div class="apt-row">
+      ${p.commentsDisabled !== true ? `<div class="apt-row">
         <label>Coments</label>
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminPreviewComments('${p.id}', 3)">+3 preview</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="adminGenerateComments('${p.id}', 1)">+1 auto</button>
@@ -745,7 +750,7 @@ function openMesaControlsModal(postId) {
             `<option value="${escapeHTML(h)}" ${selectedAs === h ? 'selected' : ''}>@${escapeHTML(h)}</option>`
           ).join('')}
         </select>
-      </div>
+      </div>` : ''}
       <div class="apt-row">
         <button type="button" class="btn btn-ghost btn-sm" onclick="togglePin('${p.id}'); closeMesaControlsModal()">${p.pinned ? 'Desafixar' : 'Fixar'}</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="setSessionMode({ postId: '${p.id}', label: 'Sessão' }); closeMesaControlsModal()">Sessão</button>

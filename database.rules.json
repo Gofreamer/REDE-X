@@ -70,6 +70,7 @@
       ".indexOn": ["createdAt"],
       "$pid": {
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
+        ".validate": "newData.child('commentsDisabled').val() !== true || !newData.child('comments').exists()",
         "likes": {
           "$uid": {
             ".write": "auth != null && auth.uid === $uid"

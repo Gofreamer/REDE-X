@@ -64,7 +64,8 @@ async function submitCompose(e) {
   const asName = document.getElementById('compose-as-name')?.value || '';
 
   const profileOnly = document.getElementById('compose-profile-only')?.checked === true;
-  const opts = { image, caption, profileOnly };
+  const commentsDisabled = document.getElementById('compose-comments-disabled')?.checked === true;
+  const opts = { image, caption, profileOnly, commentsDisabled };
   if (asHandle.trim() && isUserAdmin()) {
     opts.asHandle = asHandle;
     opts.asName = asName || asHandle;
