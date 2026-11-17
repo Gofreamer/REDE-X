@@ -174,14 +174,7 @@ function renderAdminPublicar() {
     </section>
     <section class="panel">
       <h3>Atalhos por NPC</h3>
-      <div class="npc-quick-grid">
-        ${Object.entries(state.npcProfiles || {}).map(([h, u]) => `
-          <button type="button" class="npc-quick" onclick="quickFillNpc('${escapeHTML(h)}')">
-            ${avatarHTML({ handle: h, name: u.name, avatar: u.avatar }, 'sm')}
-            <span>@${escapeHTML(h)}</span>
-          </button>
-        `).join('') || '<p class="text-muted">Nenhum NPC.</p>'}
-      </div>
+      ${renderNpcShortcuts()}
     </section>`;
 }
 
@@ -213,6 +206,28 @@ function quickFillNpc(handle) {
 
   // Caminho atalho: abre compose com NPC pré-preenchido
   openComposeAsNpc(h, name);
+}
+
+function renderNpcShortcuts(npcs = Object.entries(state.npcProfiles || {})
+    .map(([handle, profile]) => ({ ...profile, handle }))
+    .sort((a, b) => a.handle.localeCompare(b.handle))) {
+  if (!npcs.length) return '<p class="text-muted">Nenhum NPC.</p>';
+  return `<div class="npc-quick-grid">
+    ${npcs.map(npc => {
+      const handle = escapeHTML(npc.handle);
+      return `<div class="npc-quick-card">
+        <button type="button" class="npc-quick" onclick="openProfile('${handle}')" aria-label="Ver perfil de @${handle}">
+          ${avatarHTML(npc, 'sm')}
+          <span title="@${handle}">@${handle}</span>
+        </button>
+        <div class="npc-quick-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="quickFillNpc('${handle}')">Postar</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="startDmWithHandle('${handle}')">DM</button>
+          <button type="button" class="btn btn-ghost btn-sm text-danger" onclick="adminDeleteNpc('${handle}')">Apagar</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 function renderAdminNpcs() {
@@ -259,21 +274,7 @@ function renderAdminNpcs() {
     </section>
     <section class="panel">
       <h3>NPCs (${npcs.length})</h3>
-      <div class="mod-list">
-        ${npcs.map(n => `
-          <div class="mod-row">
-            ${avatarHTML(n, 'sm')}
-            <div>
-              <strong>@${escapeHTML(n.handle)}</strong>
-              <p>${escapeHTML(n.name || '')} · ${Number(n.followersCount)||0} seg.</p>
-            </div>
-            <button class="btn btn-ghost btn-sm" onclick="openProfile('${escapeHTML(n.handle)}')">Ver</button>
-            <button class="btn btn-ghost btn-sm" onclick="quickFillNpc('${escapeHTML(n.handle)}')">Postar</button>
-            <button class="btn btn-ghost btn-sm" onclick="startDmWithHandle('${escapeHTML(n.handle)}')">DM</button>
-            <button class="btn btn-ghost btn-sm text-danger" onclick="adminDeleteNpc('${escapeHTML(n.handle)}')">Apagar</button>
-          </div>
-        `).join('') || '<p class="text-muted">Nenhum NPC.</p>'}
-      </div>
+      ${renderNpcShortcuts(npcs)}
     </section>
     <section class="panel">
       <h3>Contas reais</h3>
