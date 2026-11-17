@@ -16,6 +16,7 @@ auth.onAuthStateChanged(user => {
     retryManagedImageRemovals(user.uid);
     initializeNavigation();
   } else {
+    stopWatchingOpenPost();
     state.user = null;
     state.profile = null;
     state.posts = [];

@@ -196,6 +196,10 @@ async function postMenu(id) {
 
 async function openPostModal(id, recordHistory = true) {
   saveNavigationScroll();
+  if (state.activePost !== id) {
+    state.replyTo = null;
+    state.commentAsHandle = '';
+  }
   state.activePost = id;
   document.getElementById('post-modal')?.classList.add('open');
   document.body.classList.add('post-modal-open');
@@ -211,10 +215,12 @@ async function openPostModal(id, recordHistory = true) {
   }
   if (state.activePost !== id) return; // modal já fechou / trocou
   renderPostModal(id);
+  watchOpenPost(id);
 }
 
 function closePostModal(recordHistory = true) {
   if (recordHistory && goBackInApp()) return;
+  stopWatchingOpenPost();
   state.activePost = null;
   state.replyTo = null;
   document.getElementById('post-modal')?.classList.remove('open');
@@ -281,6 +287,11 @@ function renderPostModal(id) {
     root.innerHTML = '<p class="text-muted">Post não encontrado.</p>';
     return;
   }
+  const samePost = root.dataset.renderedPost === id;
+  const previousInput = samePost ? root.querySelector('#comment-input') : null;
+  const hadFocus = previousInput && document.activeElement === previousInput;
+  const previousScroll = samePost ? root.querySelector('.modal-comments')?.scrollTop : 0;
+  root.dataset.renderedPost = id;
   const commentsDisabled = p.commentsDisabled === true;
   const comments = Object.entries(p.comments || {})
     .map(([cid, c]) => ({ id: cid, ...c }))
@@ -360,22 +371,34 @@ function renderPostModal(id) {
         </div>
       </div>
     </div>`;
+  const list = root.querySelector('.modal-comments');
+  if (list) list.scrollTop = previousScroll || 0;
+  const input = root.querySelector('#comment-input');
+  if (input && previousInput) {
+    input.value = previousInput.value;
+    if (hadFocus) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(previousInput.selectionStart, previousInput.selectionEnd, previousInput.selectionDirection);
+    }
+  }
 }
 
 function startReply(postId, commentId, handle) {
+  const post = getPostFromMemory(postId);
+  if (!post || post.commentsDisabled === true) return;
+  const author = normalizeHandle(post.handle);
+  if (isUserAdmin()) {
+    setCommentAsHandle(Object.hasOwn(state.npcProfiles || {}, author) ? author : '');
+  }
   state.replyTo = { postId, id: commentId, handle: normalizeHandle(handle) };
   renderPostModal(postId);
-  setTimeout(() => {
-    const input = document.getElementById('comment-input');
-    if (input) {
-      input.focus();
-      const val = input.value || '';
-      if (!val.includes('@' + state.replyTo.handle)) {
-        input.value = '@' + state.replyTo.handle + ' ';
-      }
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-  }, 30);
+  const input = document.getElementById('comment-input');
+  if (!input) return;
+  if (!input.value) {
+    input.value = '@' + state.replyTo.handle + ' ';
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+  input.focus();
 }
 
 function cancelReply() {
@@ -384,21 +407,35 @@ function cancelReply() {
   if (postId) renderPostModal(postId);
 }
 
+const pendingCommentPosts = new Set();
+
 async function submitComment(e, postId) {
   e.preventDefault();
+  if (pendingCommentPosts.has(postId)) return;
   const input = document.getElementById('comment-input');
   const text = input?.value || '';
-  const asH = (document.getElementById('comment-as-handle')?.value || state.commentAsHandle || '').trim();
+  const asH = (document.getElementById('comment-as-handle')?.value ?? state.commentAsHandle ?? '').trim();
   let asNpc = null;
   if (asH && isUserAdmin()) {
     const npc = (state.npcProfiles || {})[normalizeHandle(asH)];
     asNpc = { handle: asH, name: npc?.name || asH, avatar: npc?.avatar || '' };
   }
   const replyTo = state.replyTo && state.replyTo.postId === postId ? state.replyTo : null;
-  const ok = await addComment(postId, text, asNpc, replyTo);
-  if (ok) {
-    if (input) input.value = '';
-    state.replyTo = null;
+  pendingCommentPosts.add(postId);
+  let ok;
+  try {
+    ok = await addComment(postId, text, asNpc, replyTo);
+  } finally {
+    pendingCommentPosts.delete(postId);
+  }
+  if (ok && state.activePost === postId) {
+    const currentInput = document.getElementById('comment-input');
+    const currentReply = state.replyTo?.postId === postId ? state.replyTo : null;
+    if (currentReply === replyTo && currentInput?.value === text) {
+      currentInput.value = '';
+      state.replyTo = null;
+      renderPostModal(postId);
+    }
   }
 }
 

@@ -21,10 +21,39 @@ function listenPosts() {
     if (state.currentView === 'feed') renderFeed();
     if (state.currentView === 'profile') renderProfile();
     if (state.currentView === 'admin') renderAdmin();
-    if (state.activePost) renderPostModal(state.activePost);
     state.postsLoaded = true;
     checkNotifFromPosts();
   });
+}
+
+let openPostSubscription = null;
+
+function stopWatchingOpenPost() {
+  if (!openPostSubscription) return;
+  const { ref, onValue } = openPostSubscription;
+  ref.off('value', onValue);
+  openPostSubscription = null;
+}
+
+function watchOpenPost(id) {
+  stopWatchingOpenPost();
+  const ref = db.ref('posts/' + id);
+  const onValue = snap => {
+    if (openPostSubscription?.onValue !== onValue || state.activePost !== id) return;
+    const post = snap.val();
+    if (post && isPostVisibleToViewer(post)) {
+      cachePost({ id, ...post });
+    } else {
+      state.posts = state.posts.filter(item => item.id !== id);
+      if (state.profilePosts?.items) {
+        state.profilePosts.items = state.profilePosts.items.filter(item => item.id !== id);
+      }
+      if (state.postCache) delete state.postCache[id];
+    }
+    renderPostModal(id);
+  };
+  openPostSubscription = { ref, onValue };
+  ref.on('value', onValue, error => console.warn('post listener', error));
 }
 
 function listenProfiles() {
@@ -336,22 +365,15 @@ async function addComment(postId, text, asNpc, replyTo = null) {
   }
 
   try {
-    const commentRef = db.ref('posts/' + postId + '/comments').push();
-    await commentRef.set(c);
+    const postRef = db.ref('posts/' + postId);
+    const commentRef = postRef.child('comments').push();
+    await postRef.update({
+      ['comments/' + commentRef.key]: c,
+      commentCount: firebase.database.ServerValue.increment(1)
+    });
     try {
       let post = typeof getPostFromMemory === 'function' ? getPostFromMemory(postId) : (state.posts || []).find(p => p.id === postId);
       if (!post && typeof fetchPostById === 'function') post = await fetchPostById(postId);
-      const next = (post?.commentCount || 0) + 1;
-      await db.ref('posts/' + postId + '/commentCount').set(next);
-      // atualiza cache local (posts fora da janela do feed não recebem o listener)
-      if (post) {
-        if (!post.comments) post.comments = {};
-        post.comments[commentRef.key] = c;
-        post.commentCount = next;
-        if (typeof cachePost === 'function') cachePost(post);
-        if (state.activePost === postId && typeof renderPostModal === 'function') renderPostModal(postId);
-      }
-
       // 1) dono do post (player real)
       if (post && post.uid && post.uid !== uid && !String(post.uid).startsWith('npc_')) {
         await pushNotification(post.uid, {
