@@ -1251,22 +1251,44 @@ th { color: var(--faint); font-size: 0.7rem; text-transform: uppercase; }
 }
 .npc-quick-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
   gap: 8px;
+}
+.npc-quick-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
 }
 .npc-quick {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 12px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 6px 4px;
   border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 0;
+  background: transparent;
   color: var(--text);
   font-size: 0.75rem;
 }
-.npc-quick:hover { border-color: #555; background: var(--bg-2); }
+.npc-quick:hover { background: var(--bg-2); }
+.npc-quick span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.npc-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 4px 5px;
+}
+.npc-quick-actions .btn { padding: 4px; }
 
 .dm-as-npc {
   display: flex;
