@@ -40,6 +40,7 @@ function harness(hash = '') {
     requestAnimationFrame: fn => fn(), setTimeout: fn => fn(),
     normalizeHandle: h => String(h || '').toLowerCase(), isUserAdmin: () => true,
     loadProfilePosts: async handle => { state.profilePosts = { handle }; },
+    watchOpenPost() {}, stopWatchingOpenPost() {},
     getPostFromMemory: id => state.posts.find(p => p.id === id)
   });
   for (const file of ['js/features/feed.js', 'js/features/search.js', 'js/features/compose.js', 'js/features/profile.js', 'js/features/dms.js', 'js/app/navigation.js']) {
